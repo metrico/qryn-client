@@ -23,23 +23,21 @@ class Loki {
     }
 
     const payload = {
-      streams: streams.map(s => ({
-        labels: s.labels,
-        entries: s.entries
-      }))
+      streams: streams.map(s => s.collect())
     };
-
-    try {
-      return await this.service.request('/loki/api/v1/push', {
+      return this.service.request('/loki/api/v1/push', {
         method: 'POST',
         body: JSON.stringify(payload)
+      }).then( res => {
+        streams.map(s => s.reset());
+        return res
+      }).catch(error => {
+        streams.map(s => s.undo());
+        if (error instanceof QrynError) {
+          throw error;
+        }
+        throw new QrynError(`Loki push failed: ${error.message}`, error.statusCode);
       });
-    } catch (error) {
-      if (error instanceof QrynError) {
-        throw error;
-      }
-      throw new QrynError(`Loki push failed: ${error.message}`, error.statusCode);
-    }
   }
 }
 

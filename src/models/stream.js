@@ -1,10 +1,13 @@
+
 class Stream {
-  constructor(labels) {
+  #collectEntries = [];
+  constructor(labels, options = {}) {
     if (typeof labels !== 'object' || labels === null) {
       throw new Error('Labels must be a non-null object');
     }
     this.labels = this.formatLabels(labels);
     this.entries = [];
+
   }
 
   formatLabels(labels) {
@@ -14,8 +17,25 @@ class Stream {
   }
 
   addEntry(timestamp, line) {
-    timestamp =  new Date(timestamp).toISOString()
+    timestamp = new Date(timestamp).toISOString();
     this.entries.push({ ts: timestamp, line: line });
+  }
+
+  collect() {
+    const collectedData = this.toJSON();
+    this.#collectEntries = this.entries;
+    this.entries = [];
+    return collectedData;
+  }
+
+  undo() {
+    this.entries = this.#collectEntries.concat(this.entries);
+    this.#collectEntries = [];
+  }
+
+  reset() {
+    this.entries = [];
+    this.#collectEntries = [];
   }
 
   toJSON() {
@@ -26,4 +46,4 @@ class Stream {
   }
 }
 
-module.exports = Stream
+module.exports = Stream;
