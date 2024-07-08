@@ -19,6 +19,13 @@ class Prometheus {
       throw new QrynError('Metrics must be an array of Metric instances');
     }
 
+    metrics = metrics.filter((m)=>{
+      if(m.samples.length === 0){
+        console.log(`Skipping ${m.name} due to empty samples...`)
+        return false;
+      } else return true
+    });
+
     const timeseries = metrics.map(metric => metric.collect());
     const writeRequest = { timeseries };
 
