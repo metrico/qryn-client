@@ -1,6 +1,6 @@
 {
   "name": "qryn-client",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A client library for interacting with qryn, a high-performance observability backend.",
   "main": "src/index.js",
   "scripts": {
