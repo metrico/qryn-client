@@ -1,13 +1,20 @@
 class Metric {
   #cachedLabels = {}
-  constructor(name, labels = {}) {
+  constructor(name, labels = {}, options = {}) {
     this.name = name;
     this.labels = labels;
     this.samples = [];
     this.collectedSamples = [];
     this.#cachedLabels = this.generateLabels();
+    this.orgId = options.orgId
   }
-
+  getHeaders() {
+    const headers = {};
+    if (this.orgId) {
+      headers['X-Scope-OrgID'] = this.orgId;
+    }
+    return headers;
+  }
   generateLabels() {
     return [
       { name: '__name__', value: this.name },

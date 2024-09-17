@@ -7,7 +7,15 @@ class Stream {
     }
     this.labels = this.formatLabels(labels);
     this.entries = [];
+    this.orgId = options.orgId;
 
+  }
+  getHeaders() {
+    const headers = {};
+    if (this.orgId) {
+      headers['X-Scope-OrgID'] = this.orgId;
+    }
+    return headers;
   }
 
   formatLabels(labels) {

@@ -92,6 +92,37 @@ console.log('Prometheus push successful:', promResponse);
 - Use `client.prom.push()` to push an array of metrics to Prometheus.
 - You can catch any errors and fallback to a backup client if needed.
 
+### Using the Collector
+
+The `Collector` class provides a convenient way to collect and push streams and metrics to Qryn. It automatically handles the bulk pushing of data based on the specified maximum bulk size and timeout.
+
+```javascript
+const { Collector } = require('qryn-client');
+
+const collector = new Collector(client, {
+  maxBulkSize: 1000,
+  maxTimeout: 5000,
+  orgId: 'your-org-id'
+});
+
+const stream = client.createStream({ job: 'job1', env: 'prod' });
+collector.addStream(stream);
+
+const metric = client.createMetric({
+  name: 'memory_use_test_134',
+  labels: { foo: 'bar' }
+});
+collector.addMetric(metric);
+```
+
+- Create a new instance of `Collector` by passing the `QrynClient` instance and the desired options.
+  - `maxBulkSize`: The maximum bulk size for pushing data. Default is `1000`.
+  - `maxTimeout`: The maximum timeout for pushing data in milliseconds. Default is `5000`.
+  - `orgId`: The organization ID.
+- Use `collector.addStream()` to add a stream to the collector.
+- Use `collector.addMetric()` to add a metric to the collector.
+- The collector will automatically push the collected streams and metrics to Qryn when the maximum bulk size is reached or the timeout expires.
+
 ## Error Handling
 
 qryn-client provides error handling mechanisms to catch and handle errors that may occur during API requests. You can use the `.catch()` method to catch errors and implement fallback logic, such as using a backup client.
@@ -200,6 +231,30 @@ Adds a sample to the metric.
 
 - `value` (number): The value of the sample.
 - `timestamp` (number): The timestamp of the sample in milliseconds. Optional, defaults to the current timestamp.
+
+### Collector
+
+#### `constructor(qrynClient, options)`
+
+Creates a new instance of Collector.
+
+- `qrynClient` (object): The QrynClient instance.
+- `options` (object):
+  - `maxBulkSize` (number): The maximum bulk size for pushing data. Default is `1000`.
+  - `maxTimeout` (number): The maximum timeout for pushing data in milliseconds. Default is `5000`.
+  - `orgId` (string): The organization ID.
+
+#### `addStream(stream)`
+
+Adds a stream to the collector.
+
+- `stream` (Stream): The stream instance to add.
+
+#### `addMetric(metric)`
+
+Adds a metric to the collector.
+
+- `metric` (Metric): The metric instance to add.
 
 ## Contributing
 
