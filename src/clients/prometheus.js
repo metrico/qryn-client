@@ -2,7 +2,138 @@ const Http = require('../services/http')
 const Protobuff = require('../services/protobuff')
 const path = require('path');
 const {Metric} = require('../models')
-const {QrynError} = require('../types')
+const {QrynError} = require('../types');
+
+
+class Read {
+  constructor(service, options) {
+    this.service = service;
+    this.options = options;
+  }
+
+  /**
+   * Execute a PromQL query and retrieve the result.
+   * @param {string} query - The PromQL query string.
+   * @returns {Promise<QrynResponse>} A promise that resolves to the response from the query endpoint.
+   * @throws {QrynError} If the query request fails.
+   */
+  async query(query) {
+    return this.service.request('/api/v1/query', {
+      method: 'POST',
+      headers: this.headers(),
+      body: { query }
+    }).catch(error => {
+      if (error instanceof QrynError) {
+        throw error;
+      }
+      throw new QrynError(`Prometheus query failed: ${error.message}`, error.statusCode);
+    });
+  }
+
+  /**
+   * Execute a PromQL query over a range of time.
+   * @param {string} query - The PromQL query string.
+   * @param {number} start - The start timestamp in seconds.
+   * @param {number} end - The end timestamp in seconds.
+   * @param {string} step - The query resolution step width in duration format (e.g., '15s').
+   * @returns {Promise<QrynResponse>} A promise that resolves to the response from the query range endpoint.
+   * @throws {QrynError} If the query range request fails.
+   */
+  async queryRange(query, start, end, step) {
+
+    return this.service.request('/api/v1/query_range', {
+      method: 'POST',
+      headers: this.headers(),
+      body: new URLSearchParams({query, start, end, step})
+    }).catch(error => {
+      if (error instanceof QrynError) {
+        throw error;
+      }
+      throw new QrynError(`Prometheus query range failed: ${error.message}`, error.statusCode);
+    });
+  }
+
+  /**
+   * Retrieve the list of label names.
+   * @returns {Promise<QrynResponse>} A promise that resolves to the response from the labels endpoint.
+   * @throws {QrynError} If the labels request fails.
+   */
+  async labels() {
+    return this.service.request('/api/v1/labels', {
+      method: 'GET',
+      headers: this.headers()
+    }).catch(error => {
+      if (error instanceof QrynError) {
+        throw error;
+      }
+      throw new QrynError(`Prometheus labels retrieval failed: ${error.message}`, error.statusCode);
+    });
+  }
+
+  /**
+   * Retrieve the list of label values for a specific label name.
+   * @param {string} labelName - The name of the label.
+   * @returns {Promise<QrynResponse>} A promise that resolves to the response from the label values endpoint.
+   * @throws {QrynError} If the label values request fails.
+   */
+  async labelValues(labelName) {
+    return this.service.request(`/api/v1/label/${labelName}/values`, {
+      method: 'GET',
+      headers: this.headers()
+    }).catch(error => {
+      if (error instanceof QrynError) {
+        throw error;
+      }
+      throw new QrynError(`Prometheus label values retrieval failed: ${error.message}`, error.statusCode);
+    });
+  }
+
+  /**
+   * Retrieve the list of time series that match a specified label set.
+   * @param {Object} match - The label set to match.
+   * @param {number} start - The start timestamp in seconds.
+   * @param {number} end - The end timestamp in seconds.
+   * @returns {Promise<QrynResponse>} A promise that resolves to the response from the series endpoint.
+   * @throws {QrynError} If the series request fails.
+   */
+  async series(match, start, end) {
+    return this.service.request('/api/v1/series', {
+      method: 'POST',
+      headers: this.headers(),
+      body: new URLSearchParams({ match, start, end })
+    }).catch(error => {
+      if (error instanceof QrynError) {
+        throw error;
+      }
+      throw new QrynError(`Prometheus series retrieval failed: ${error.message}`, error.statusCode);
+    });
+  }
+
+  /**
+   * Retrieve the currently loaded alerting and recording rules.
+   * @returns {Promise<QrynResponse>} A promise that resolves to the response from the rules endpoint.
+   * @throws {QrynError} If the rules request fails.
+   */
+  async rules() {
+    return this.service.request('/api/v1/rules', {
+      method: 'GET',
+      headers: this.headers()
+    }).catch(error => {
+      if (error instanceof QrynError) {
+        throw error;
+      }
+      throw new QrynError(`Prometheus rules retrieval failed: ${error.message}`, error.statusCode);
+    });
+  }
+
+  headers() {
+    let headers = {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    };
+    if (this.options.orgId) headers['X-Scope-OrgID'] = this.options.orgId;
+    return headers;
+  }
+}
 
 class Prometheus {
   /**
@@ -55,6 +186,15 @@ class Prometheus {
       }
       throw new QrynError(`Prometheus Remote Write push failed: ${error.message}`, error.statusCode);
     });
+  }
+  /**
+  * Create a new Read instance for reading metrics from Prometheus.
+  * @param {Object} options - Options for the read operation.
+  * @param {string} [options.orgId] - The organization ID to include in the request headers.
+  * @returns {Read} A new Read instance.
+  */
+  createReader(options) {
+    return new Read(this.service, options);
   }
 
   headers(options = {}) {

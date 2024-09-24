@@ -1,4 +1,3 @@
-
 <a href="https://qryn.cloud" target="_blank"><img src='https://user-images.githubusercontent.com/1423657/218816262-e0e8d7ad-44d0-4a7d-9497-0d383ed78b83.png' width=170></a>
 
 # qryn-client
@@ -143,6 +142,60 @@ collector.on('error', error => {
 });
 ```
 
+### Reading Metrics from Prometheus
+
+To read metrics from Prometheus, you can use the `createReader()` method of the `prom` object. It returns a `Read` instance that provides methods for querying and retrieving metrics.
+
+```javascript
+const reader = client.prom.createReader({
+  orgId: 'your-org-id'
+});
+
+// Retrieve the list of label names
+reader.labels().then(labels => {
+  console.log('Label names:', labels.response.data);
+});
+
+// Retrieve the list of label values for a specific label name
+reader.labelValues('job').then(values => {
+  console.log('Label values for "job":', values.response.data);
+});
+
+// Execute a PromQL query
+const query = 'sum(rate(http_requests_total[5m]))';
+reader.query(query).then(result => {
+  console.log('Query result:', result.response.data);
+});
+
+// Execute a PromQL query over a range of time
+const start = Math.floor(Date.now() / 1000) - (0.5 * 60 * 60);
+const end = Math.floor(Date.now() / 1000);
+const step = 60;
+reader.queryRange(query, start, end, step).then(result => {
+  console.log('Query range result:', result.response.data);
+});
+
+// Retrieve the list of time series that match a specified label set
+const match = { job: 'api-server' };
+reader.series(match, start, end).then(result => {
+  console.log('Series result:', result.response.data);
+});
+
+// Retrieve the currently loaded alerting and recording rules
+reader.rules().then(result => {
+  console.log('Rules:', result.response.data);
+});
+```
+
+- Use `client.prom.createReader()` to create a new `Read` instance with the desired options.
+- Use the methods provided by the `Read` instance to query and retrieve metrics from Prometheus.
+- The `labels()` method retrieves the list of label names.
+- The `labelValues()` method retrieves the list of label values for a specific label name.
+- The `query()` method executes a PromQL query and retrieves the result.
+- The `queryRange()` method executes a PromQL query over a range of time.
+- The `series()` method retrieves the list of time series that match a specified label set.
+- The `rules()` method retrieves the currently loaded alerting and recording rules.
+
 ## Error Handling
 
 qryn-client provides error handling mechanisms to catch and handle errors that may occur during API requests. You can use the `.catch()` method to catch errors and implement fallback logic, such as using a backup client.
@@ -281,6 +334,65 @@ Creates a new metric with the specified options and adds it to the collector.
   - `labels` (object): An object containing the labels for the metric.
 
 Returns a new `Metric` instance.
+
+### Read
+
+#### `constructor(service, options)`
+
+Creates a new instance of Read.
+
+- `service` (object): The HTTP service for making requests.
+- `options` (object):
+  - `orgId` (string): The organization ID to include in the request headers.
+
+#### `query(query)`
+
+Execute a PromQL query and retrieve the result.
+
+- `query` (string): The PromQL query string.
+
+Returns a promise that resolves to the response from the query endpoint.
+
+#### `queryRange(query, start, end, step)`
+
+Execute a PromQL query over a range of time.
+
+- `query` (string): The PromQL query string.
+- `start` (number): The start timestamp in seconds.
+- `end` (number): The end timestamp in seconds.
+- `step` (string): The query resolution step width in duration format (e.g., '15s').
+
+Returns a promise that resolves to the response from the query range endpoint.
+
+#### `labels()`
+
+Retrieve the list of label names.
+
+Returns a promise that resolves to the response from the labels endpoint.
+
+#### `labelValues(labelName)`
+
+Retrieve the list of label values for a specific label name.
+
+- `labelName` (string): The name of the label.
+
+Returns a promise that resolves to the response from the label values endpoint.
+
+#### `series(match, start, end)`
+
+Retrieve the list of time series that match a specified label set.
+
+- `match` (object): The label set to match.
+- `start` (number): The start timestamp in seconds.
+- `end` (number): The end timestamp in seconds.
+
+Returns a promise that resolves to the response from the series endpoint.
+
+#### `rules()`
+
+Retrieve the currently loaded alerting and recording rules.
+
+Returns a promise that resolves to the response from the rules endpoint.
 
 ## Contributing
 

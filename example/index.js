@@ -2,7 +2,7 @@ const {QrynClient,Metric, Stream} = require('../src');
 
 async function main() {
     const client = new QrynClient({
-        baseUrl: process.env['QYRN_URL'],
+        baseUrl: process.env['QYRN_WRITE_URL'],
         auth: {
           username: process.env['QYRN_LOGIN'],
           password: process.env['QRYN_PASSWORD']

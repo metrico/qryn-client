@@ -9,8 +9,8 @@ class QrynResponse {
    * @param {Object} headers - The headers of the response.
    */
   #headers;
-  constructor(data, status, headers, path) {
-    this.data = data;
+  constructor(res, status, headers, path) {
+    this.response = res;
     this.status = status;
     this.headers = headers;
     this.path = path;

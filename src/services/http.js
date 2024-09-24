@@ -43,6 +43,7 @@ class Http {
   async request(path, options = {}) {
     const url = new URL(path, this.baseUrl);
     const headers = { ...this.headers, ...options.headers };
+    let res = {};
 
     // Add Authorization header if basic auth is set
     if (this.basicAuth) {
@@ -58,13 +59,21 @@ class Http {
     try {
       const response = await fetch(url.toString(), fetchOptions);
 
+
+      if(headers['Content-Type'] === 'application/x-www-form-urlencoded'){
+        res = await response.json();
+      }
+
       if (!response.ok) {
-        throw new QrynError(`HTTP error! status: ${response.status}`, response.status, path);
+        let message = `HTTP error! status: ${response.status}`
+        throw new QrynError(message, response.status, res, path);
       }
       
-      return new QrynResponse({}, response.status, response.headers, path)
+      return new QrynResponse(res, response.status, response.headers, path)
       
     } catch (error) {
+      if(error instanceof QrynError)
+        throw error;
       throw new QrynError(`Request failed: ${error.message} ${error?.cause?.message}`, 400, error.cause, path);    
     }
   }
