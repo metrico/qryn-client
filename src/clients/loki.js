@@ -20,14 +20,18 @@ class Loki {
    * @throws {QrynError} If the push fails or if the input is invalid.
    */
   async push(streams, options = {}) {
-    if (!Array.isArray(streams) || !streams.every(s => s instanceof Stream)) {
+
+    let payload = { streams: []}
+    if (!Array.isArray(streams) || !streams.every(s => {
+        if(s instanceof Stream){
+          if(s.entries.length)
+            payload.streams.push(s.collect())
+            return s;
+        }
+      
+    })) {
       throw new QrynError('Streams must be an array of Stream instances');
     }
-
-    const payload = {
-      streams: streams.map(s => s.collect())
-    };
-
     const headers = this.headers(options);
 
     try {
@@ -37,7 +41,7 @@ class Loki {
         body: JSON.stringify(payload)
       });
 
-      streams.forEach(s => s.reset());
+      streams.forEach(s => s.confirm());
       return response;
     } catch (error) {
       streams.forEach(s => s.undo());
@@ -51,6 +55,9 @@ class Loki {
   headers(options = {}) {
     const headers = {};
     if (options.orgId) headers['X-Scope-OrgID'] = options.orgId;
+    if (options.async) headers['X-Async-Insert'] = options.async;
+    if (options.fpLimit) headers['X-Ttl-Days'] = options.fpLimit;
+    if (options.ttlDays) headers['X-FP-LIMIT'] = options.ttlDays;
     return headers;
   }
 }

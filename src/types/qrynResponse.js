@@ -8,17 +8,19 @@ class QrynResponse {
    * @param {number} status - The HTTP status code of the response.
    * @param {Object} headers - The headers of the response.
    */
-  constructor(data, status, headers) {
+  #headers;
+  constructor(data, status, headers, path) {
     this.data = data;
     this.status = status;
     this.headers = headers;
+    this.path = path;
   }
 
   /**
    * Check if the response was successful.
    * @returns {boolean} True if the status code is in the 2xx range.
    */
-  isSuccess() {
+  get isSuccess() {
     return this.status >= 200 && this.status < 300;
   }
 
@@ -34,7 +36,7 @@ class QrynResponse {
    * Get the HTTP status code.
    * @returns {number} The HTTP status code.
    */
-  getStatus() {
+  get getStatus() {
     return this.status;
   }
 
@@ -42,8 +44,13 @@ class QrynResponse {
    * Get the response headers.
    * @returns {Object} The response headers.
    */
-  getHeaders() {
-    return this.headers;
+  get getHeaders() {
+    if(this.#headers) return this.#headers;
+    this.#headers = {}
+    for(const [key , value] of this.headers){
+      this.#headers[key] = value;
+    }
+    return this.#headers;
   }
 
   /**
@@ -52,7 +59,7 @@ class QrynResponse {
    * @returns {string|null} The value of the header, or null if not found.
    */
   getHeader(name) {
-    return this.headers[name] || null;
+    return this.headers?.get(name) || null;
   }
 
   /**
@@ -60,7 +67,7 @@ class QrynResponse {
    * @returns {string} A string representation of the response.
    */
   toString() {
-    return `QrynResponse {status: ${this.status}, data: ${JSON.stringify(this.data)}}`;
+    return this.type + ` Response {status: ${this.status}, data: ${JSON.stringify(this.data)}}`;
   }
 }
 

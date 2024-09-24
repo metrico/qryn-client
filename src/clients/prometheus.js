@@ -23,11 +23,19 @@ class Prometheus {
    * @throws {QrynError} If the metrics are not an array of Metric instances or if the push request fails.
    */
   async push(metrics, options) {
-    if (!Array.isArray(metrics) || !metrics.every(m => m instanceof Metric)) {
+    let timeseries = [];
+    if (!Array.isArray(metrics) || !metrics.every(m => {
+        if(m instanceof Metric){
+          if(m.samples.length)
+            timeseries.push(m.collect())
+            return m;
+        }
+      
+    })) {
       throw new QrynError('Metrics must be an array of Metric instances');
     }
-
-    const timeseries = metrics.map(metric => metric.collect());
+    if(!timeseries.length) return;
+    //const timeseries = metrics.map(metric => metric.collect());
     const writeRequest = { timeseries };
 
     const buffer = this.protobufHandler.encodeWriteRequest(writeRequest);
@@ -38,7 +46,7 @@ class Prometheus {
       headers: this.headers(options),
       body: compressedBuffer
     }).then(res => {
-      metrics.forEach(metric => metric.reset());
+      metrics.forEach(metric => metric.confirm());
       return res;
     }).catch(error => {
       metrics.forEach(metric => metric.undo());
@@ -56,6 +64,9 @@ class Prometheus {
       'X-Prometheus-Remote-Write-Version': '0.1.0'
     };
     if (options.orgId) headers['X-Scope-OrgID'] = options.orgId;
+    if (options.async) headers['X-Async-Insert'] = options.async;
+    if (options.fpLimit) headers['X-Ttl-Days'] = options.fpLimit;
+    if (options.ttlDays) headers['X-FP-LIMIT'] = options.ttlDays;
     return headers;
   }
 }

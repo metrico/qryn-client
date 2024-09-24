@@ -1,54 +1,77 @@
-
 class Stream {
-  #collectEntries = [];
-  constructor(labels, options = {}) {
+  #key = '';
+  #cachedLabels = '';
+  #collectedEntries = [];
+
+  constructor(labels = {}) {
     if (typeof labels !== 'object' || labels === null) {
       throw new Error('Labels must be a non-null object');
     }
-    this.labels = this.formatLabels(labels);
+    this.labels = labels;
     this.entries = [];
-    this.orgId = options.orgId;
-
+    this.#cachedLabels = this.formatLabels(labels);
+    this.listeners = [];
   }
-  getHeaders() {
-    const headers = {};
-    if (this.orgId) {
-      headers['X-Scope-OrgID'] = this.orgId;
-    }
-    return headers;
+
+  get key() {
+    if (this.#key) return this.#key;
+    this.#key = this.#cachedLabels;
+    return this.#key;
+  }
+
+  get hasBulkProcessing() {
+    return Boolean(this.listeners.length);
   }
 
   formatLabels(labels) {
     return '{' + Object.entries(labels)
-      .map(([key, value]) => `${key}="${value}"`)
+      .map(([key, value]) => `${key}="${value.toString()}"`)
       .join(',') + '}';
   }
 
+  addListener(callback) {
+    if (typeof callback !== 'function') {
+      throw new Error('Callback must be a function');
+    }
+    this.listeners.push(callback);
+  }
+
+  #notifyListeners() {
+    if (this.entries.length > 0) {
+      this.listeners.forEach(listener => listener(this));
+    }
+  }
+
   addEntry(timestamp, line) {
-    timestamp = new Date(timestamp).toISOString();
-    this.entries.push({ ts: timestamp, line: line });
+    const formattedTimestamp = new Date(timestamp).toISOString();
+    this.entries.push({ ts: formattedTimestamp, line: line });
+    this.#notifyListeners();
   }
 
   collect() {
     const collectedData = this.toJSON();
-    this.#collectEntries = this.entries;
+    this.#collectedEntries = this.entries;
     this.entries = [];
     return collectedData;
   }
 
+  confirm() {
+    this.#collectedEntries = [];
+  }
+
   undo() {
-    this.entries = this.#collectEntries.concat(this.entries);
-    this.#collectEntries = [];
+    this.entries = this.#collectedEntries.concat(this.entries);
+    this.#collectedEntries = [];
   }
 
   reset() {
     this.entries = [];
-    this.#collectEntries = [];
+    this.#collectedEntries = [];
   }
 
   toJSON() {
     return {
-      labels: this.labels,
+      labels: this.#cachedLabels,
       entries: this.entries
     };
   }

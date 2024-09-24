@@ -59,17 +59,14 @@ class Http {
       const response = await fetch(url.toString(), fetchOptions);
 
       if (!response.ok) {
-        throw new QrynError(`HTTP error! status: ${response.status}`, response.status);
+        throw new QrynError(`HTTP error! status: ${response.status}`, response.status, path);
       }
       
-     return response.json().then( async json => {
-        return new QrynResponse(json, response.status, await response.headers)
-     }).catch(async err => {
-        return new QrynResponse({}, response.status, await response.headers)
-     })
-    } catch (error) {
+      return new QrynResponse({}, response.status, response.headers, path)
       
-      throw new QrynError(`Request failed: ${error.message} ${error?.cause?.message}`, 400, error.cause);    }
+    } catch (error) {
+      throw new QrynError(`Request failed: ${error.message} ${error?.cause?.message}`, 400, error.cause, path);    
+    }
   }
 }
 

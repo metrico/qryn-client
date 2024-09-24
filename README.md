@@ -1,3 +1,4 @@
+
 <a href="https://qryn.cloud" target="_blank"><img src='https://user-images.githubusercontent.com/1423657/218816262-e0e8d7ad-44d0-4a7d-9497-0d383ed78b83.png' width=170></a>
 
 # qryn-client
@@ -105,23 +106,42 @@ const collector = new Collector(client, {
   orgId: 'your-org-id'
 });
 
-const stream = client.createStream({ job: 'job1', env: 'prod' });
-collector.addStream(stream);
+const stream = collector.createStream({ job: 'job1', env: 'prod' });
+stream.addEntry(Date.now(), 'Log message 1');
 
-const metric = client.createMetric({
+const metric = collector.createMetric({
   name: 'memory_use_test_134',
   labels: { foo: 'bar' }
 });
-collector.addMetric(metric);
+metric.addSample(1024 * 1024 * 100);
 ```
 
 - Create a new instance of `Collector` by passing the `QrynClient` instance and the desired options.
   - `maxBulkSize`: The maximum bulk size for pushing data. Default is `1000`.
   - `maxTimeout`: The maximum timeout for pushing data in milliseconds. Default is `5000`.
   - `orgId`: The organization ID.
-- Use `collector.addStream()` to add a stream to the collector.
-- Use `collector.addMetric()` to add a metric to the collector.
+- Use `collector.createStream()` to create a new stream with the desired labels.
+- Use `stream.addEntry()` to add log entries to the stream.
+- Use `collector.createMetric()` to create a new metric with the desired name and labels.
+- Use `metric.addSample()` to add samples to the metric.
 - The collector will automatically push the collected streams and metrics to Qryn when the maximum bulk size is reached or the timeout expires.
+
+The Collector class also emits events to provide information about the push operations:
+
+- `info` event: Emitted when a successful push response is received from Qryn.
+- `error` event: Emitted when an error occurs during the push operation.
+
+You can listen to these events to handle the push responses and errors accordingly:
+
+```javascript
+collector.on('info', response => {
+  console.log('Push successful:', response);
+});
+
+collector.on('error', error => {
+  console.error('Push error:', error);
+});
+```
 
 ## Error Handling
 
@@ -244,17 +264,23 @@ Creates a new instance of Collector.
   - `maxTimeout` (number): The maximum timeout for pushing data in milliseconds. Default is `5000`.
   - `orgId` (string): The organization ID.
 
-#### `addStream(stream)`
+#### `createStream(labels)`
 
-Adds a stream to the collector.
+Creates a new stream with the specified labels and adds it to the collector.
 
-- `stream` (Stream): The stream instance to add.
+- `labels` (object): An object containing the labels for the stream.
 
-#### `addMetric(metric)`
+Returns a new `Stream` instance.
 
-Adds a metric to the collector.
+#### `createMetric(options)`
 
-- `metric` (Metric): The metric instance to add.
+Creates a new metric with the specified options and adds it to the collector.
+
+- `options` (object):
+  - `name` (string): The name of the metric.
+  - `labels` (object): An object containing the labels for the metric.
+
+Returns a new `Metric` instance.
 
 ## Contributing
 
