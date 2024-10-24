@@ -1,0 +1,42 @@
+name: 'NPM CI+CD'
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: 'Build & Publish'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.1.1
+        with:
+          ref: ${{ github.ref }}
+      - name: Update Package to Release version
+        uses: technote-space/package-version-check-action@v1.9.3
+      - name: Check NPM secret presence
+        id: checksecrets
+        shell: bash
+        run: |
+          if [ "$SECRET" == "" ]; then
+            echo "secretspresent=false" >> $GITHUB_OUTPUT
+          else
+            echo "secretspresent=true" >> $GITHUB_OUTPUT
+          fi
+        env:
+          SECRET: ${{ secrets.NPM_TOKEN }}
+      - uses: actions/setup-node@v4.0.1
+        if: ${{ steps.checksecrets.outputs.secretspresent }}
+        with:
+          node-version: 20
+      - name: Publish to NPM
+        if: ${{ steps.checksecrets.outputs.secretspresent }}
+        continue-on-error: false
+        run: |
+          npm config set //registry.npmjs.org/:_authToken ${NPM_TOKEN}
+          npm install
+          npm publish --access public
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  
