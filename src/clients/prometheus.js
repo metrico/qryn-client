@@ -90,17 +90,22 @@ class Read {
 
   /**
    * Retrieve the list of time series that match a specified label set.
-   * @param {Object} match - The label set to match.
+   * @param {Array} match - The label set to match.
    * @param {number} start - The start timestamp in seconds.
    * @param {number} end - The end timestamp in seconds.
    * @returns {Promise<QrynResponse>} A promise that resolves to the response from the series endpoint.
    * @throws {QrynError} If the series request fails.
    */
   async series(match, start, end) {
+    let params = new URLSearchParams({start, end })
+    if(!match) throw new QrynError('match parameter is required');
+    if(typeof match  === 'string') match = [match];
+    match.forEach( match => params.append('match[]', match));
+
     return this.service.request('/api/v1/series', {
       method: 'POST',
       headers: this.headers(),
-      body: new URLSearchParams({ match, start, end })
+      body: params
     }).catch(error => {
       if (error instanceof QrynError) {
         throw error;
