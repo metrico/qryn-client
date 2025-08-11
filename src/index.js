@@ -2,6 +2,7 @@ const {Stream, Metric} = require('./models')
 const PrometheusClient = require('./clients/prometheus')
 const Collector = require('./utils/collector');
 const LokiClient = require('./clients/loki')
+const TempoClient = require('./clients/tempo')
 const Http = require('./services/http')
 
 
@@ -40,26 +41,27 @@ class QrynClient {
     const http = new Http(baseUrl, timeout, headers, auth);
     this.prom = new PrometheusClient(http);
     this.loki = new LokiClient(http);
+    this.tempo = new TempoClient(http);
   }
-  
+
   /**
- * Creates a new Collector instance.
- *
- * @param {Object} [config] - The configuration options for the Collector.
- * @param {number} [config.maxBulkSize=1000] - The maximum number of items to store in the bulk before pushing.
- * @param {number} [config.maxTimeout=5000] - The maximum time in milliseconds to wait before pushing the bulk.
- * @returns {Collector} A new Collector instance.
- *
- * @example
- * const qrynClient = new QrynClient({
- *   // ... qrynClient configuration
- * });
- *
- * const collector = qrynClient.createCollector({
- *   maxBulkSize: 500,
- *   maxTimeout: 3000
- * });
- */
+   * Creates a new Collector instance.
+   *
+   * @param {Object} [config] - The configuration options for the Collector.
+   * @param {number} [config.maxBulkSize=1000] - The maximum number of items to store in the bulk before pushing.
+   * @param {number} [config.maxTimeout=5000] - The maximum time in milliseconds to wait before pushing the bulk.
+   * @returns {Collector} A new Collector instance.
+   *
+   * @example
+   * const qrynClient = new QrynClient({
+   *   // ... qrynClient configuration
+   * });
+   *
+   * const collector = qrynClient.createCollector({
+   *   maxBulkSize: 500,
+   *   maxTimeout: 3000
+   * });
+   */
   createCollector(config){
     return new Collector(this, config);
   }
@@ -73,12 +75,12 @@ class QrynClient {
     return new Stream(labels);
   }
 
-/**
- * Create a new Metric instance.
- * @param {string} name - The name of the metric.
- * @param {Object} [labels={}] - Optional labels for the metric.
- * @returns {Metric} A new Metric instance.
- */
+  /**
+   * Create a new Metric instance.
+   * @param {string} name - The name of the metric.
+   * @param {Object} [labels={}] - Optional labels for the metric.
+   * @returns {Metric} A new Metric instance.
+   */
   createMetric({ name, labels = {} }) {
     return new Metric(name, labels);
   }
