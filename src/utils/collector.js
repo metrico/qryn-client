@@ -47,7 +47,7 @@ class Collector extends EventEmitter {
       updateAgeOnGet: true, // Update the age of an item when it's accessed
       allowStale: false, // Don't serve stale items
     };
-    let cacheOptions = Object.assign(options,defaultCacheOptions)
+    let cacheOptions = Object.assign({},defaultCacheOptions,options)
 
     return new LRUCache(cacheOptions)
   }
