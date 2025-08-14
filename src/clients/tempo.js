@@ -23,6 +23,12 @@ class TempoClient {
         })
     }
 
+    async getTraceSpansJson(traceID) {
+        return this.service.request(`/api/traces/${traceID}/json`, {
+            method: 'GET'
+        })
+    }
+
     headers(options) {
         let headers = {
             'Content-Type': 'application/json',
