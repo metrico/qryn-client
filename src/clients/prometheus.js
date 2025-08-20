@@ -2,7 +2,7 @@ const Http = require('../services/http')
 const Protobuff = require('../services/protobuff')
 const path = require('path');
 const {Metric} = require('../models')
-const {QrynError} = require('../types');
+const {GigapipeError} = require('../types');
 
 
 class Read {
@@ -14,8 +14,8 @@ class Read {
   /**
    * Execute a PromQL query and retrieve the result.
    * @param {string} query - The PromQL query string.
-   * @returns {Promise<QrynResponse>} A promise that resolves to the response from the query endpoint.
-   * @throws {QrynError} If the query request fails.
+   * @returns {Promise<GigapipeResponse>} A promise that resolves to the response from the query endpoint.
+   * @throws {GigapipeError} If the query request fails.
    */
   async query(query) {
     return this.service.request('/api/v1/query', {
@@ -23,10 +23,10 @@ class Read {
       headers: this.headers(),
       body: { query }
     }).catch(error => {
-      if (error instanceof QrynError) {
+      if (error instanceof GigapipeError) {
         throw error;
       }
-      throw new QrynError(`Prometheus query failed: ${error.message}`, error.statusCode);
+      throw new GigapipeError(`Prometheus query failed: ${error.message}`, error.statusCode);
     });
   }
 
@@ -36,8 +36,8 @@ class Read {
    * @param {number} start - The start timestamp in seconds.
    * @param {number} end - The end timestamp in seconds.
    * @param {string} step - The query resolution step width in duration format (e.g., '15s').
-   * @returns {Promise<QrynResponse>} A promise that resolves to the response from the query range endpoint.
-   * @throws {QrynError} If the query range request fails.
+   * @returns {Promise<GigapipeResponse>} A promise that resolves to the response from the query range endpoint.
+   * @throws {GigapipeError} If the query range request fails.
    */
   async queryRange(query, start, end, step) {
 
@@ -46,45 +46,45 @@ class Read {
       headers: this.headers(),
       body: new URLSearchParams({query, start, end, step})
     }).catch(error => {
-      if (error instanceof QrynError) {
+      if (error instanceof GigapipeError) {
         throw error;
       }
-      throw new QrynError(`Prometheus query range failed: ${error.message}`, error.statusCode);
+      throw new GigapipeError(`Prometheus query range failed: ${error.message}`, error.statusCode);
     });
   }
 
   /**
    * Retrieve the list of label names.
-   * @returns {Promise<QrynResponse>} A promise that resolves to the response from the labels endpoint.
-   * @throws {QrynError} If the labels request fails.
+   * @returns {Promise<GigapipeResponse>} A promise that resolves to the response from the labels endpoint.
+   * @throws {GigapipeError} If the labels request fails.
    */
   async labels() {
     return this.service.request('/api/v1/labels', {
       method: 'GET',
       headers: this.headers()
     }).catch(error => {
-      if (error instanceof QrynError) {
+      if (error instanceof GigapipeError) {
         throw error;
       }
-      throw new QrynError(`Prometheus labels retrieval failed: ${error.message}`, error.statusCode);
+      throw new GigapipeError(`Prometheus labels retrieval failed: ${error.message}`, error.statusCode);
     });
   }
 
   /**
    * Retrieve the list of label values for a specific label name.
    * @param {string} labelName - The name of the label.
-   * @returns {Promise<QrynResponse>} A promise that resolves to the response from the label values endpoint.
-   * @throws {QrynError} If the label values request fails.
+   * @returns {Promise<GigapipeResponse>} A promise that resolves to the response from the label values endpoint.
+   * @throws {GigapipeError} If the label values request fails.
    */
   async labelValues(labelName) {
     return this.service.request(`/api/v1/label/${labelName}/values`, {
       method: 'GET',
       headers: this.headers()
     }).catch(error => {
-      if (error instanceof QrynError) {
+      if (error instanceof GigapipeError) {
         throw error;
       }
-      throw new QrynError(`Prometheus label values retrieval failed: ${error.message}`, error.statusCode);
+      throw new GigapipeError(`Prometheus label values retrieval failed: ${error.message}`, error.statusCode);
     });
   }
 
@@ -93,12 +93,12 @@ class Read {
    * @param {Array} match - The label set to match.
    * @param {number} start - The start timestamp in seconds.
    * @param {number} end - The end timestamp in seconds.
-   * @returns {Promise<QrynResponse>} A promise that resolves to the response from the series endpoint.
-   * @throws {QrynError} If the series request fails.
+   * @returns {Promise<GigapipeResponse>} A promise that resolves to the response from the series endpoint.
+   * @throws {GigapipeError} If the series request fails.
    */
   async series(match, start, end) {
     let params = new URLSearchParams({start, end })
-    if(!match) throw new QrynError('match parameter is required');
+    if(!match) throw new GigapipeError('match parameter is required');
     if(typeof match  === 'string') match = [match];
     match.forEach( match => params.append('match[]', match));
 
@@ -107,27 +107,27 @@ class Read {
       headers: this.headers(),
       body: params
     }).catch(error => {
-      if (error instanceof QrynError) {
+      if (error instanceof GigapipeError) {
         throw error;
       }
-      throw new QrynError(`Prometheus series retrieval failed: ${error.message}`, error.statusCode);
+      throw new GigapipeError(`Prometheus series retrieval failed: ${error.message}`, error.statusCode);
     });
   }
 
   /**
    * Retrieve the currently loaded alerting and recording rules.
-   * @returns {Promise<QrynResponse>} A promise that resolves to the response from the rules endpoint.
-   * @throws {QrynError} If the rules request fails.
+   * @returns {Promise<GigapipeResponse>} A promise that resolves to the response from the rules endpoint.
+   * @throws {GigapipeError} If the rules request fails.
    */
   async rules() {
     return this.service.request('/api/v1/rules', {
       method: 'GET',
       headers: this.headers()
     }).catch(error => {
-      if (error instanceof QrynError) {
+      if (error instanceof GigapipeError) {
         throw error;
       }
-      throw new QrynError(`Prometheus rules retrieval failed: ${error.message}`, error.statusCode);
+      throw new GigapipeError(`Prometheus rules retrieval failed: ${error.message}`, error.statusCode);
     });
   }
 
@@ -156,7 +156,7 @@ class Prometheus {
    * @param {Object} options - Additional options for the push request.
    * @param {string} [options.orgId] - The organization ID to include in the request headers.
    * @returns {Promise<Object>} A promise that resolves to the response from the remote write endpoint.
-   * @throws {QrynError} If the metrics are not an array of Metric instances or if the push request fails.
+   * @throws {GigapipeError} If the metrics are not an array of Metric instances or if the push request fails.
    */
   async push(metrics, options) {
     let timeseries = [];
@@ -168,7 +168,7 @@ class Prometheus {
         }
       
     })) {
-      throw new QrynError('Metrics must be an array of Metric instances');
+      throw new GigapipeError('Metrics must be an array of Metric instances');
     }
     if(!timeseries.length) return;
     //const timeseries = metrics.map(metric => metric.collect());
@@ -186,10 +186,10 @@ class Prometheus {
       return res;
     }).catch(error => {
       metrics.forEach(metric => metric.undo());
-      if (error instanceof QrynError) {
+      if (error instanceof GigapipeError) {
         throw error;
       }
-      throw new QrynError(`Prometheus Remote Write push failed: ${error.message}`, error.statusCode);
+      throw new GigapipeError(`Prometheus Remote Write push failed: ${error.message}`, error.statusCode);
     });
   }
   /**

@@ -4,6 +4,7 @@ const Collector = require('./utils/collector');
 const LokiClient = require('./clients/loki')
 const TempoClient = require('./clients/tempo')
 const Http = require('./services/http')
+const GigapipeError = require('./types/gigapipeError')
 
 
 
@@ -16,20 +17,20 @@ class Auth{
 
 
 /**
- * Main client for qryn operations.
+ * Main client for Gigapipe operations.
  */
-class QrynClient {
+class GigapipeClient {
   /**
-   * Create a QrynClient.
+   * Create a GigapipeClient.
    * @param {Object} config - The configuration object.
-   * @param {string} [config.baseUrl='http://localhost:3100'] - The base URL for the qryn server.
-   * @param {Auth} [config.auth] - The base Auth for the qryn server.
+   * @param {string} [config.baseUrl='http://localhost:3100'] - The base URL for the Gigapipe server.
+   * @param {Auth} [config.auth] - The base Auth for the Gigapipe server.
    * @param {number} [config.timeout=5000] - The timeout for requests in milliseconds.
    * @param {Object} [config.headers={}] - Additional headers to send with requests.
    */
   constructor(config) {
     if (typeof config !== 'object' || config === null) {
-      throw new QrynError('Config must be a non-null object');
+      throw new GigapipeError('Config must be a non-null object');
     }
     const auth = config.auth
     const baseUrl = config.baseUrl || 'http://localhost:3100';
@@ -44,24 +45,24 @@ class QrynClient {
     this.tempo = new TempoClient(http);
   }
 
-  /**
-   * Creates a new Collector instance.
-   *
-   * @param {Object} [config] - The configuration options for the Collector.
-   * @param {number} [config.maxBulkSize=1000] - The maximum number of items to store in the bulk before pushing.
-   * @param {number} [config.maxTimeout=5000] - The maximum time in milliseconds to wait before pushing the bulk.
-   * @returns {Collector} A new Collector instance.
-   *
-   * @example
-   * const qrynClient = new QrynClient({
-   *   // ... qrynClient configuration
-   * });
-   *
-   * const collector = qrynClient.createCollector({
-   *   maxBulkSize: 500,
-   *   maxTimeout: 3000
-   * });
-   */
+   /**
+    * Creates a new Collector instance.
+    *
+    * @param {Object} [config] - The configuration options for the Collector.
+    * @param {number} [config.maxBulkSize=1000] - The maximum number of items to store in the bulk before pushing.
+    * @param {number} [config.maxTimeout=5000] - The maximum time in milliseconds to wait before pushing the bulk.
+    * @returns {Collector} A new Collector instance.
+    *
+    * @example
+    * const gigapipeClient = new GigapipeClient({
+    *   // ... gigapipeClient configuration
+    * });
+    *
+    * const collector = gigapipeClient.createCollector({
+    *   maxBulkSize: 500,
+    *   maxTimeout: 3000
+    * });
+    */
   createCollector(config){
     return new Collector(this, config);
   }
@@ -85,7 +86,12 @@ class QrynClient {
     return new Metric(name, labels);
   }
 
-  // Add more methods for other qryn operations as needed
+  // Add more methods for other Gigapipe operations as needed
 }
 
-module.exports = { QrynClient, Stream, Metric, Collector };
+module.exports = { 
+  GigapipeClient, 
+  Stream, 
+  Metric, 
+  Collector 
+};

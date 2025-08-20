@@ -1,4 +1,4 @@
-const { QrynError } = require('../types');
+const { GigapipeError } = require('../types');
 const { Stream } = require('../models');
 const Http = require('../services/http');
 
@@ -17,7 +17,7 @@ class Loki {
    * @param {Object} options - Additional options for the request.
    * @param {string} options.orgId - The organization ID for the request.
    * @returns {Promise<Object>} The response from the Loki API.
-   * @throws {QrynError} If the push fails or if the input is invalid.
+   * @throws {GigapipeError} If the push fails or if the input is invalid.
    */
   async push(streams, options = {}) {
 
@@ -30,7 +30,7 @@ class Loki {
         }
       
     })) {
-      throw new QrynError('Streams must be an array of Stream instances');
+      throw new GigapipeError('Streams must be an array of Stream instances');
     }
     const headers = this.headers(options);
 
@@ -45,10 +45,10 @@ class Loki {
       return response;
     } catch (error) {
       streams.forEach(s => s.undo());
-      if (error instanceof QrynError) {
+      if (error instanceof GigapipeError) {
         throw error;
       }
-      throw new QrynError(`Loki push failed: ${error.message}`, error.statusCode);
+      throw new GigapipeError(`Loki push failed: ${error.message}`, error.statusCode);
     }
   }
 

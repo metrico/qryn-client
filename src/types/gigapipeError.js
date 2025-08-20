@@ -1,13 +1,14 @@
 /**
- * Custom error class for QrynClient errors.
+ * Custom error class for GigapipeClient errors.
  */
-class QrynError extends Error {
+class GigapipeError extends Error {
   constructor(message, statusCode = null, cause, path) {
     super(message);
-    this.name = 'QrynError';
+    this.name = 'GigapipeError';
     this.statusCode = statusCode;
     this.cause = cause;
     this.path = path;
   }
 }
-module.exports = QrynError;
+
+module.exports = GigapipeError;

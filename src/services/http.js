@@ -1,6 +1,6 @@
-const { QrynError } = require('../types');
+const { GigapipeError } = require('../types');
 const { URL } = require('url');
-const QrynResponse = require('../types/qrynResponse');
+const GigapipeResponse = require('../types/gigapipeResponse');
 
 /**
  * Handles HTTP requests for QrynClient.
@@ -38,7 +38,7 @@ class Http {
    * @param {string} path - The path to append to the base URL.
    * @param {Object} options - The options for the fetch request.
    * @returns {Promise<Object>} The parsed JSON response.
-   * @throws {QrynError} If the request fails or returns a non-OK status.
+   * @throws {GigapipeError} If the request fails or returns a non-OK status.
    */
   async request(path, options = {}) {
     const url = new URL(path, this.baseUrl);
@@ -60,21 +60,25 @@ class Http {
       const response = await fetch(url.toString(), fetchOptions);
 
 
-      if(headers['Content-Type'] === 'application/x-www-form-urlencoded'){
+      // Parse response body if present
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
         res = await response.json();
+      } else if (response.status !== 204) {
+        res = await response.text();
       }
 
       if (!response.ok) {
         let message = `HTTP error! status: ${response.status}`
-        throw new QrynError(message, response.status, res, path);
+        throw new GigapipeError(message, response.status, res, path);
       }
       
-      return new QrynResponse(res, response.status, response.headers, path)
+      return new GigapipeResponse(res, response.status, response.headers, path)
       
     } catch (error) {
-      if(error instanceof QrynError)
+      if(error instanceof GigapipeError)
         throw error;
-      throw new QrynError(`Request failed: ${error.message} ${error?.cause?.message}`, 400, error.cause, path);    
+      throw new GigapipeError(`Request failed: ${error.message} ${error?.cause?.message}`, 400, error.cause, path);    
     }
   }
 }

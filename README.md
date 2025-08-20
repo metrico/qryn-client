@@ -1,28 +1,26 @@
-<a href="https://qryn.cloud" target="_blank"><img src='https://user-images.githubusercontent.com/1423657/218816262-e0e8d7ad-44d0-4a7d-9497-0d383ed78b83.png' width=170></a>
+# gigapipe-client
 
-# qryn-client
-
-The official Node.js client for [qryn](https://qryn.dev).
+The official Node.js client for [Gigapipe](https://gigapipe.com).
 
 ## Installation
 
-You can install qryn-client using npm:
+You can install gigapipe-client using npm:
 
 ```bash
-npm install qryn-client
+npm install gigapipe-client
 ```
 
 ## Usage
 
-### Creating a qryn-client Instance
+### Creating a Gigapipe Client Instance
 
-To create a new instance of QrynClient, you need to provide the necessary configuration options:
+To create a new instance of GigapipeClient, you need to provide the necessary configuration options:
 
 ```javascript
-const { QrynClient } = require('qryn-client');
+const { GigapipeClient } = require('gigapipe-client');
 
-const client = new QrynClient({
-  baseUrl: 'https://qryn.example.com',
+const client = new GigapipeClient({
+  baseUrl: 'https://gigapipe.example.com',
   auth: {
     username: 'your-username',
     password: 'your-password'
@@ -31,11 +29,11 @@ const client = new QrynClient({
 });
 ```
 
-- `baseUrl`: The base URL of the Qryn API.
+- `baseUrl`: The base URL of the Gigapipe API.
 - `auth`: An object containing the authentication credentials (`username` and `password`).
 - `timeout`: The timeout value in milliseconds for API requests.
 
-You can create multiple instances of QrynClient with different configurations for backup purposes.
+You can create multiple instances of GigapipeClient with different configurations for backup purposes.
 
 ### Pushing Logs to Loki
 
@@ -94,10 +92,10 @@ console.log('Prometheus push successful:', promResponse);
 
 ### Using the Collector
 
-The `Collector` class provides a convenient way to collect and push streams and metrics to Qryn. It automatically handles the bulk pushing of data based on the specified maximum bulk size and timeout.
+The `Collector` class provides a convenient way to collect and push streams and metrics to Gigapipe. It automatically handles the bulk pushing of data based on the specified maximum bulk size and timeout.
 
 ```javascript
-const { Collector } = require('qryn-client');
+const { Collector } = require('gigapipe-client');
 
 const collector = new Collector(client, {
   maxBulkSize: 1000,
@@ -115,7 +113,7 @@ const metric = collector.createMetric({
 metric.addSample(1024 * 1024 * 100);
 ```
 
-- Create a new instance of `Collector` by passing the `QrynClient` instance and the desired options.
+- Create a new instance of `Collector` by passing the `GigapipeClient` instance and the desired options.
   - `maxBulkSize`: The maximum bulk size for pushing data. Default is `1000`.
   - `maxTimeout`: The maximum timeout for pushing data in milliseconds. Default is `5000`.
   - `orgId`: The organization ID.
@@ -123,11 +121,11 @@ metric.addSample(1024 * 1024 * 100);
 - Use `stream.addEntry()` to add log entries to the stream.
 - Use `collector.createMetric()` to create a new metric with the desired name and labels.
 - Use `metric.addSample()` to add samples to the metric.
-- The collector will automatically push the collected streams and metrics to Qryn when the maximum bulk size is reached or the timeout expires.
+- The collector will automatically push the collected streams and metrics to Gigapipe when the maximum bulk size is reached or the timeout expires.
 
 The Collector class also emits events to provide information about the push operations:
 
-- `info` event: Emitted when a successful push response is received from Qryn.
+- `info` event: Emitted when a successful push response is received from Gigapipe.
 - `error` event: Emitted when an error occurs during the push operation.
 
 You can listen to these events to handle the push responses and errors accordingly:
@@ -198,7 +196,7 @@ reader.rules().then(result => {
 
 ## Error Handling
 
-qryn-client provides error handling mechanisms to catch and handle errors that may occur during API requests. You can use the `.catch()` method to catch errors and implement fallback logic, such as using a backup client.
+gigapipe-client provides error handling mechanisms to catch and handle errors that may occur during API requests. You can use the `.catch()` method to catch errors and implement fallback logic, such as using a backup client.
 
 ```javascript
 const lokiResponse = await client.loki.push([stream1, stream2]).catch(error => {
@@ -220,19 +218,19 @@ const promResponse = await client.prom.push([memoryUsed, cpuUsed]).catch(error =
 
 ## Configuration
 
-qryn-client allows you to configure various options when creating an instance. Here are the available configuration options:
+gigapipe-client allows you to configure various options when creating an instance. Here are the available configuration options:
 
-- `baseUrl` (required): The base URL of the Qryn API.
+- `baseUrl` (required): The base URL of the Gigapipe API.
 - `auth` (required): An object containing the authentication credentials.
   - `username`: The username for authentication.
   - `password`: The password for authentication.
 - `timeout` (optional): The timeout value in milliseconds for API requests. Default is `5000`.
 
-You can pass these options when creating a new instance of qryn-client:
+You can pass these options when creating a new instance of gigapipe-client:
 
 ```javascript
-const client = new QrynClient({
-  baseUrl: 'https://qryn.example.com',
+const client = new GigapipeClient({
+  baseUrl: 'https://gigapipe.example.com',
   auth: {
     username: 'your-username',
     password: 'your-password'
@@ -243,14 +241,14 @@ const client = new QrynClient({
 
 ## API Reference
 
-### qryn-client
+### GigapipeClient
 
 #### `constructor(options)`
 
-Creates a new instance of QrynClient.
+Creates a new instance of GigapipeClient.
 
 - `options` (object):
-  - `baseUrl` (string): The base URL of the Qryn API.
+  - `baseUrl` (string): The base URL of the Gigapipe API.
   - `auth` (object):
     - `username` (string): The username for authentication.
     - `password` (string): The password for authentication.
@@ -307,11 +305,11 @@ Adds a sample to the metric.
 
 ### Collector
 
-#### `constructor(qrynClient, options)`
+#### `constructor(gigapipeClient, options)`
 
 Creates a new instance of Collector.
 
-- `qrynClient` (object): The QrynClient instance.
+- `gigapipeClient` (object): The GigapipeClient instance.
 - `options` (object):
   - `maxBulkSize` (number): The maximum bulk size for pushing data. Default is `1000`.
   - `maxTimeout` (number): The maximum timeout for pushing data in milliseconds. Default is `5000`.
@@ -396,8 +394,8 @@ Returns a promise that resolves to the response from the rules endpoint.
 
 ## Contributing
 
-Contributions to qryn-client are welcome! If you find any issues or have suggestions for improvements, please open an issue or submit a pull request on the [GitHub repository](https://github.com/metrico/qryn-client).
+Contributions to gigapipe-client are welcome! If you find any issues or have suggestions for improvements, please open an issue or submit a pull request on the [GitHub repository](https://github.com/gigapipe/gigapipe-client).
 
 ## License
 
-qryn-client is open-source software licensed under the [MIT License](https://opensource.org/licenses/MIT).
+gigapipe-client is open-source software licensed under the [MIT License](https://opensource.org/licenses/MIT).

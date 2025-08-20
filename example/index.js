@@ -1,22 +1,34 @@
-const {QrynClient,Metric, Stream} = require('../src');
+const { GigapipeClient, Metric, Stream } = require('../src');
 
 async function main() {
-    const client = new QrynClient({
-        baseUrl: process.env['QYRN_WRITE_URL'],
+    const baseUrl = process.env['GIGAPIPE_WRITE_URL'] ? 
+        `http://${process.env['GIGAPIPE_WRITE_URL']}:3100` : 
+        'http://localhost:3100';
+        
+    const client = new GigapipeClient({
+        baseUrl: baseUrl,
         auth: {
-          username: process.env['QYRN_LOGIN'],
-          password: process.env['QRYN_PASSWORD']
+          username: process.env['GIGAPIPE_LOGIN'] || 'your-username',
+          password: process.env['GIGAPIPE_PASSWORD'] || 'your-password'
         },
         timeout: 5000
-    })
-    const client2 = new QrynClient({
-      baseUrl: process.env['QYRN_URL_BACKUP'],
+    });
+    
+    const backupUrl = process.env['GIGAPIPE_URL_BACKUP'] ? 
+        `http://${process.env['GIGAPIPE_URL_BACKUP']}:3100` : 
+        'http://localhost:3101';
+        
+    const client2 = new GigapipeClient({
+      baseUrl: backupUrl,
       auth: {
-        username: process.env['QYRN_LOGIN_BACKUP'],
-        password: process.env['QRYN_PASSWORD_BACKUP']
+        username: process.env['GIGAPIPE_LOGIN_BACKUP'] || process.env['GIGAPIPE_LOGIN'] || 'your-username',
+        password: process.env['GIGAPIPE_PASSWORD_BACKUP'] || process.env['GIGAPIPE_PASSWORD'] || 'your-password'
       },
       timeout: 5000
-  })
+    });
+    
+    console.log(`Primary server: ${baseUrl}`);
+    console.log(`Backup server: ${backupUrl}`);
     // Create and push Loki streams
     const stream1 = client.createStream({ job: 'job1', env: 'prod' });
     stream1.addEntry(Date.now(), 'Log message 1');

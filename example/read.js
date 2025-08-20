@@ -1,17 +1,26 @@
-const {QrynClient,Metric, Stream} = require('../src');
+const { GigapipeClient, Metric, Stream } = require('../src');
 
 async function main() {
-    const client = new QrynClient({
-        baseUrl: process.env['QYRN_READ_URL'],
+    const baseUrl = process.env['GIGAPIPE_READ_URL'] ? 
+        `http://${process.env['GIGAPIPE_READ_URL']}:3100` : 
+        process.env['GIGAPIPE_WRITE_URL'] ? 
+        `http://${process.env['GIGAPIPE_WRITE_URL']}:3100` : 
+        'http://localhost:3100';
+        
+    const client = new GigapipeClient({
+        baseUrl: baseUrl,
         auth: {
-          username: process.env['QYRN_LOGIN'],
-          password: process.env['QRYN_PASSWORD']
+          username: process.env['GIGAPIPE_LOGIN'] || 'your-username',
+          password: process.env['GIGAPIPE_PASSWORD'] || 'your-password'
         },
         timeout: 15000
-    })
+    });
+    
+    console.log(`Reading from: ${baseUrl}`);
+    
     const reader = client.prom.createReader({
-        orgId: process.env['QYRN_ORG_ID']
-    })
+        orgId: process.env['GIGAPIPE_ORG_ID'] || 'your-org-id'
+    });
 
     let metrics = await reader.labels().then( labels => {
         let label = labels.response.data[1];

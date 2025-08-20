@@ -1,4 +1,4 @@
-const {QrynError} = require("../types");
+const {GigapipeError} = require("../types");
 
 class TempoClient {
     /**

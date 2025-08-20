@@ -1,7 +1,7 @@
-const QrynError = require("./qrynError");
-const QrynResponse = require("./qrynResponse");
+const GigapipeError = require("./gigapipeError");
+const GigapipeResponse = require("./gigapipeResponse");
 
-class NetworkError extends QrynError {
+class NetworkError extends GigapipeError {
   constructor(message, options = {}) {
     super(message, options);
     this.name = 'NetworkError';
@@ -9,7 +9,7 @@ class NetworkError extends QrynError {
   }
 }
 
-class ValidationError extends QrynError {
+class ValidationError extends GigapipeError {
   constructor(message, options = {}) {
     super(message, options);
     this.name = 'ValidationError';
@@ -20,6 +20,6 @@ class ValidationError extends QrynError {
 module.exports = {
   NetworkError,
   ValidationError,
-  QrynError,
-  QrynResponse
+  GigapipeError,
+  GigapipeResponse
 }

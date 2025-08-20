@@ -1,16 +1,16 @@
-const { QrynError, ValidationError } = require('../types');
+const { GigapipeError, ValidationError } = require('../types');
 const { Stream, Metric } = require('../models');
 const EventEmitter = require('events');
 const { LRUCache } = require('lru-cache')
 
 /**
- * Collector class for collecting and pushing streams and metrics to Qryn.
+ * Collector class for collecting and pushing streams and metrics to Gigapipe.
  * @extends EventEmitter
  */
 class Collector extends EventEmitter {
   /**
    * Create a Collector instance.
-   * @param {Object} qrynClient - The Qryn client instance.
+   * @param {Object} gigapipeClient - The Gigapipe client instance.
    * @param {Object} [options={}] - The collector options.
    * @param {number} [options.maxEntries=1000] - The maximum entries for pushing data.
    * @param {number} [options.maxTimeout=5000] - The maximum timeout for pushing data.
@@ -24,9 +24,9 @@ class Collector extends EventEmitter {
    */
   #totalEntries = 0; 
   #totalSamples = 0;
-  constructor(qrynClient, options = {}) {
-    super();
-    this.qrynClient = qrynClient;
+   constructor(gigapipeClient, options = {}) {
+     super();
+     this.qrynClient = gigapipeClient;
     this.maxBulkSize = options.maxBulkSize || 1000;
     this.maxTimeout = options.maxTimeout || 5000;
     this.orgId = options.orgId;
@@ -135,7 +135,7 @@ class Collector extends EventEmitter {
   }
 
   /**
-   * Push the collected streams and metrics to Qryn.
+   * Push the collected streams and metrics to Gigapipe.
    * @private
    * @async
    */
@@ -148,20 +148,34 @@ class Collector extends EventEmitter {
     this.#totalSamples = 0;
 
 
-    await this.retryOperation(async () => {
+    try {
       if (totalEntries > 0) {        
-        const streams = Array.from(this.streams.values());
-        await this.qrynClient.loki.push(streams, this.options).then( response => this.emit('info', response));
+        const streams = Array.from(this.streams.keys()).map(key => this.streams.get(key)).filter(stream => stream instanceof Stream);
+        if (streams.length === 0) {
+          const error = new GigapipeError('No valid streams found for push operation despite having entries count', 400);
+          this.emit('error', error);
+          return;
+        }
+        await this.retryOperation(async () => {
+          await this.qrynClient.loki.push(streams, this.options).then( response => this.emit('info', response));
+        });
       }
       if (totalSamples > 0) {
-        const metrics = Array.from(this.metrics.values());
-        await this.qrynClient.prom.push(metrics, this.options).then( response => this.emit('info', response));;
+        const metrics = Array.from(this.metrics.keys()).map(key => this.metrics.get(key)).filter(metric => metric instanceof Metric);
+        if (metrics.length === 0) {
+          const error = new GigapipeError('No valid metrics found for push operation despite having samples count', 400);
+          this.emit('error', error);
+          return;
+        }
+        await this.retryOperation(async () => {
+          await this.qrynClient.prom.push(metrics, this.options).then( response => this.emit('info', response));
+        });
       }
-    }).catch(error => {
+    } catch (error) {
         this.#totalEntries += totalEntries;
         this.#totalSamples += totalSamples;
         this.emit('error', error);
-    });
+    }
   }
 
   /**
@@ -169,7 +183,7 @@ class Collector extends EventEmitter {
    * @private
    * @async
    * @param {Function} operation - The operation to retry.
-   * @throws {QrynError} If all retry attempts fail.
+   * @throws {GigapipeError} If all retry attempts fail.
    */
   async retryOperation(operation) {
     for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {

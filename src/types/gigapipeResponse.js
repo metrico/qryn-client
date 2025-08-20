@@ -1,9 +1,9 @@
 /**
- * Represents a standardized response from the Qryn API.
+ * Represents a standardized response from the Gigapipe API.
  */
-class QrynResponse {
+class GigapipeResponse {
   /**
-   * Create a QrynResponse.
+   * Create a GigapipeResponse.
    * @param {Object} data - The response data from the API.
    * @param {number} status - The HTTP status code of the response.
    * @param {Object} headers - The headers of the response.
@@ -71,4 +71,4 @@ class QrynResponse {
   }
 }
 
-module.exports = QrynResponse;
+module.exports = GigapipeResponse;
