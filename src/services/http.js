@@ -3,7 +3,7 @@ const { URL } = require('url');
 const GigapipeResponse = require('../types/gigapipeResponse');
 
 /**
- * Handles HTTP requests for QrynClient.
+ * Handles HTTP requests for GigapipeClient.
  */
 class Http {
   baseUrl = null;
@@ -13,7 +13,7 @@ class Http {
 
   /**
    * Create an HttpClient.
-   * @param {string} baseUrl - The base URL for the qryn server.
+   * @param {string} baseUrl - The base URL for the Gigapipe server.
    * @param {number} timeout - The timeout for requests in milliseconds.
    * @param {Object} headers - Headers to send with requests.
    */

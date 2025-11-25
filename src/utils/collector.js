@@ -26,7 +26,7 @@ class Collector extends EventEmitter {
   #totalSamples = 0;
    constructor(gigapipeClient, options = {}) {
      super();
-     this.qrynClient = gigapipeClient;
+     this.gigapipeClient = gigapipeClient;
     this.maxBulkSize = options.maxBulkSize || 1000;
     this.maxTimeout = options.maxTimeout || 5000;
     this.orgId = options.orgId;
@@ -157,7 +157,7 @@ class Collector extends EventEmitter {
           return;
         }
         await this.retryOperation(async () => {
-          await this.qrynClient.loki.push(streams, this.options).then( response => this.emit('info', response));
+          await this.gigapipeClient.loki.push(streams, this.options).then( response => this.emit('info', response));
         });
       }
       if (totalSamples > 0) {
@@ -168,7 +168,7 @@ class Collector extends EventEmitter {
           return;
         }
         await this.retryOperation(async () => {
-          await this.qrynClient.prom.push(metrics, this.options).then( response => this.emit('info', response));
+          await this.gigapipeClient.prom.push(metrics, this.options).then( response => this.emit('info', response));
         });
       }
     } catch (error) {
