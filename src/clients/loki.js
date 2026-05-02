@@ -56,6 +56,16 @@ class Loki {
   }
 
   /**
+   * Create a LokiReader bound to this client's service.
+   * @param {{ orgId?: string }} [options]
+   * @returns {import('./loki-read')}
+   */
+  createReader(options = {}) {
+    const LokiReader = require('./loki-read');
+    return new LokiReader(this.service, options);
+  }
+
+  /**
    * Build per-request headers from push options.
    * @param {Object} [options={}] - Push options.
    * @param {string} [options.orgId]   - Multi-tenant routing → `X-Scope-OrgID`.
