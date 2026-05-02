@@ -1,5 +1,7 @@
-const QrynError = require("./qrynError");
-const QrynResponse = require("./qrynResponse");
+const QrynError = require('./qrynError');
+const QrynResponse = require('./qrynResponse');
+const QrynAbortedError = require('./qrynAbortedError');
+const QrynTimeoutError = require('./qrynTimeoutError');
 
 class NetworkError extends QrynError {
   constructor(message, options = {}) {
@@ -21,5 +23,7 @@ module.exports = {
   NetworkError,
   ValidationError,
   QrynError,
+  QrynAbortedError,
+  QrynTimeoutError,
   QrynResponse
-}
+};
