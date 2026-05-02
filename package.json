@@ -15,19 +15,23 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/username/qryn-client.git"
+    "url": "https://github.com/metrico/qryn-client.git"
   },
   "keywords": [
     "qryn",
     "client",
     "observability",
     "monitoring",
-    "logging"
+    "logging",
+    "loki",
+    "prometheus",
+    "tempo",
+    "tracing"
   ],
   "bugs": {
-    "url": "https://github.com/username/qryn-client/issues"
+    "url": "https://github.com/metrico/qryn-client/issues"
   },
-  "homepage": "https://github.com/username/qryn-client#readme",
+  "homepage": "https://github.com/metrico/qryn-client#readme",
   "engines": {
     "node": ">=18.0.0"
   }
