@@ -10,7 +10,7 @@
   "license": "MIT",
   "dependencies": {
     "lru-cache": "^11.0.1",
-    "protobufjs": "^7.3.2",
+    "protobufjs": "^8.0.3",
     "snappy": "^7.2.2"
   },
   "repository": {
