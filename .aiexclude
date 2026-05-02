@@ -1,0 +1,34 @@
+# Paths agents should not load into context.
+# Mirrors .gitignore plus secrets-shaped paths.
+# Recognized by: Cursor (.aiexclude), Gemini Code Assist, generic LLM tooling.
+
+# Dependencies — not source
+node_modules/
+
+# Lock files — generated, large, no semantic content for agents
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Editor / IDE state
+.vscode/
+.idea/
+
+# Build / coverage / cache (none today, prophylactic)
+dist/
+build/
+coverage/
+.cache/
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Secrets-shaped — defense in depth, even though .gitignore should catch these
+.env
+.env.*
+*.pem
+*.key
+*.crt
+secrets.json
+credentials.json
