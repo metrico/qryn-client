@@ -7,7 +7,11 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "qryn-client": ["./index.d.ts"]
+    }
   },
   "include": ["index.d.ts", "tests/types/**/*"]
 }
