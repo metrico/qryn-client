@@ -1,88 +1,117 @@
-const { QrynError } = require('../types');
+'use strict';
+
 const { URL } = require('url');
-const QrynResponse = require('../types/qrynResponse');
+const {
+  QrynError,
+  QrynAbortedError,
+  QrynTimeoutError,
+  QrynResponse
+} = require('../types');
+const { resolveAuthHeaders } = require('./auth');
+const { anySignal } = require('../utils/abort');
 
 /**
  * Handles HTTP requests for QrynClient.
  */
 class Http {
-  baseUrl = null;
-  timeout = null;
-  headers = null;
-  basicAuth = null;
-
   /**
-   * Create an HttpClient.
-   * @param {string} baseUrl - The base URL for the qryn server.
-   * @param {number} timeout - The timeout for requests in milliseconds.
-   * @param {Object} headers - Headers to send with requests.
+   * @param {string} baseUrl
+   * @param {number} timeout - default per-request timeout in ms.
+   * @param {Object} headers - default headers, merged before auth.
+   * @param {import('./auth').QrynAuth|undefined} auth
+   * @param {Object} [opts]
+   * @param {import('../utils/retry').RetryOptions} [opts.retry]
+   * @param {string} [opts.defaultOrgId]
+   * @param {typeof globalThis.fetch} [fetchImpl] - injected for testing.
    */
-  constructor(baseUrl, timeout, headers, auth) {
+  constructor(baseUrl, timeout, headers, auth, opts = {}, fetchImpl = globalThis.fetch) {
     this.baseUrl = new URL(baseUrl);
     this.timeout = timeout;
     this.headers = headers;
-    if (auth) this.#setBasicAuth(auth)
+    this.auth = auth;
+    this.defaultRetry = opts.retry;
+    this.defaultOrgId = opts.defaultOrgId;
+    this.fetchImpl = fetchImpl;
   }
 
   /**
-   * Set basic authentication credentials.
-   * @param {string} username - The username for basic auth.
-   * @param {string} password - The password for basic auth.
-   */
-  #setBasicAuth({username, password}) {
-    this.basicAuth = Buffer.from(`${username}:${password}`).toString('base64');
-  }
-
-  /**
-   * Make an HTTP request.
-   * @param {string} path - The path to append to the base URL.
-   * @param {Object} options - The options for the fetch request.
-   * @returns {Promise<Object>} The parsed JSON response.
-   * @throws {QrynError} If the request fails or returns a non-OK status.
+   * @param {string} path
+   * @param {Object} [options]
+   * @param {string} [options.method]
+   * @param {Object} [options.headers]
+   * @param {*} [options.body]
+   * @param {AbortSignal} [options.signal]
+   * @param {number} [options.timeoutMs]
+   * @param {string} [options.orgId]
+   * @returns {Promise<QrynResponse>}
    */
   async request(path, options = {}) {
     const url = new URL(path, this.baseUrl);
-    const headers = { ...this.headers, ...options.headers };
-    let res = {};
+    const effectiveTimeout = options.timeoutMs ?? this.timeout;
 
-    // Add Authorization header if basic auth is set
-    if (this.basicAuth) {
-      headers['Authorization'] = `Basic ${this.basicAuth}`;
-    }
+    const authHeaders = await resolveAuthHeaders(this.auth);
+    const orgId = options.orgId ?? this.defaultOrgId;
 
-    const fetchOptions = {
-      ...options,
-      headers,
-      signal: AbortSignal.timeout(this.timeout)
+    const headers = {
+      ...this.headers,
+      ...options.headers,
+      ...authHeaders
     };
+    if (orgId) headers['X-Scope-OrgID'] = orgId;
 
+    const timeoutSignal = AbortSignal.timeout(effectiveTimeout);
+    const signal = options.signal
+      ? anySignal([options.signal, timeoutSignal])
+      : timeoutSignal;
+
+    const startedAt = Date.now();
+    let response;
     try {
-      const response = await fetch(url.toString(), fetchOptions);
-
-      // Parse the body based on the response Content-Type, not the request's.
-      // Empty bodies (204, no content-length) are tolerated.
-      const responseContentType = (response.headers && response.headers.get && response.headers.get('content-type')) || '';
-      if (response.status !== 204) {
-        if (responseContentType.includes('application/json')) {
-          res = await response.json().catch(() => ({}));
-        } else if (responseContentType) {
-          const text = await response.text().catch(() => '');
-          res = text || {};
-        }
-      }
-
-      if (!response.ok) {
-        let message = `HTTP error! status: ${response.status}`
-        throw new QrynError(message, response.status, res, path);
-      }
-
-      return new QrynResponse(res, response.status, response.headers, path)
-
+      response = await this.fetchImpl(url.toString(), {
+        method: options.method,
+        headers,
+        body: options.body,
+        signal
+      });
     } catch (error) {
-      if(error instanceof QrynError)
-        throw error;
-      throw new QrynError(`Request failed: ${error.message} ${error?.cause?.message ?? ''}`.trim(), 400, error.cause, path);
+      if (error && error.name === 'AbortError') {
+        if (options.signal && options.signal.aborted) {
+          throw new QrynAbortedError(
+            'Request aborted by caller',
+            options.signal.reason,
+            path
+          );
+        }
+        throw new QrynTimeoutError(
+          `Request timed out after ${effectiveTimeout}ms`,
+          Date.now() - startedAt,
+          path
+        );
+      }
+      throw new QrynError(
+        `Request failed: ${error.message} ${error?.cause?.message ?? ''}`.trim(),
+        400,
+        error.cause,
+        path
+      );
     }
+
+    let body = {};
+    const ct = (response.headers && response.headers.get && response.headers.get('content-type')) || '';
+    if (response.status !== 204) {
+      if (ct.includes('application/json')) {
+        body = await response.json().catch(() => ({}));
+      } else if (ct) {
+        const text = await response.text().catch(() => '');
+        body = text || {};
+      }
+    }
+
+    if (!response.ok) {
+      throw new QrynError(`HTTP error! status: ${response.status}`, response.status, body, path);
+    }
+
+    return new QrynResponse(body, response.status, response.headers, path);
   }
 }
 
