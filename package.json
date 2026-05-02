@@ -4,7 +4,7 @@
   "description": "A client library for interacting with qryn, a high-performance observability backend.",
   "main": "src/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test tests/unit/*.test.js"
   },
   "author": "tzachiSh",
   "license": "MIT",
