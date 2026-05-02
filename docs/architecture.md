@@ -25,9 +25,10 @@ A one-page mental model of `qryn-client`. For the agent-facing rules of engageme
                          └──────────┘
                                │
                                ▼
-                          fetch + AbortSignal.timeout
-                          basic auth
-                          QrynError on non-2xx / network failure
+                          fetch + AbortSignal.timeout + anySignal
+                          auth (basic/bearer/custom) resolved per-request
+                          retry loop with backoff + jitter
+                          QrynError / QrynAbortedError / QrynTimeoutError
 ```
 
 `QrynClient` constructs one `Http` instance and hands it to all three sub-clients. Sub-clients hold no state of their own beyond the `service` reference.
@@ -122,17 +123,65 @@ The `Collector` (in `src/utils/collector.js`) is an `EventEmitter` that wraps a 
 
 ## HTTP transport
 
-`Http.request(path, options)`:
+`Http.request(path, options)` is a per-call options pipeline. Per-call values for `signal`, `timeoutMs`, `retry`, and `orgId` override the constructor-time defaults.
 
-1. Resolves `path` against `baseUrl` via WHATWG `URL`.
-2. Merges instance headers + per-call headers.
-3. Adds `Authorization: Basic <base64>` if `auth` was provided.
-4. Calls `fetch` with `signal: AbortSignal.timeout(timeout)`.
-5. Parses the response body based on the **response** `Content-Type`.
-6. Throws `QrynError(message, status, body, path)` on non-OK or network/timeout error.
-7. Returns `QrynResponse` on 2xx.
+### Single-request flow
 
-`QrynError` extends `Error` and carries `statusCode`, `cause` (original error), and `path`. `QrynResponse` wraps body + status + headers and exposes `isSuccess`, `getHeaders`, `getHeader(name)`.
+1. Resolve `path` against `baseUrl` via WHATWG `URL`.
+2. Compute effective timeout: `options.timeoutMs ?? this.timeout` (default `60_000` ms).
+3. Await `resolveAuthHeaders(auth)` to get `Authorization` / custom headers (see [Auth](#auth)).
+4. Resolve `orgId`: `options.orgId ?? this.defaultOrgId`.
+5. Merge headers: instance headers → per-call headers → auth headers → `X-Scope-OrgID` if orgId is set.
+6. Build combined `AbortSignal`: `anySignal([options.signal, AbortSignal.timeout(effectiveTimeout)])`.
+7. Call `fetch`. On `AbortError`:
+   - If `options.signal.aborted` → throw `QrynAbortedError`.
+   - Otherwise → throw `QrynTimeoutError(durationMs)`.
+   - Other network errors → throw `QrynError`.
+8. Parse response body from **response** `Content-Type` (`application/json` → JSON, other → text).
+9. Throw `QrynError(message, status, cause, path)` on non-OK.
+10. Return `QrynResponse` on 2xx.
+
+### Retry loop
+
+`Http.request` wraps `#singleRequest` in a retry loop driven by `RetryOptions`:
+
+```
+{ attempts: 3, baseDelayMs: 200, maxDelayMs: 5000 }   ← defaults
+```
+
+Retry policy:
+- **Never retry** on `QrynAbortedError` (caller cancelled).
+- **Retry** on network errors: `ECONNREFUSED`, `ECONNRESET`, `ETIMEDOUT`, `EAI_AGAIN`.
+- **Retry** on HTTP `408 / 429 / 502 / 503 / 504`. Never retry other 4xx.
+- On HTTP 429, honor `Retry-After` response header (seconds or RFC 7231 date).
+- Delay between attempts uses **exponential backoff with full jitter**: `jitter * min(maxDelayMs, baseDelayMs * 2^(attempt-1))`.
+- Per-call `options.retry` overrides constructor-level `retry`, which overrides the built-in default.
+
+### Error types
+
+| Class | When thrown | Extra fields |
+|---|---|---|
+| `QrynError` | non-2xx response, unrecognised network error | `statusCode`, `cause`, `path` |
+| `QrynAbortedError` | `AbortSignal` fired by caller | `cause` (abort reason) |
+| `QrynTimeoutError` | per-request timeout fired | `durationMs` |
+
+`QrynAbortedError` and `QrynTimeoutError` both extend `QrynError`.
+
+## Auth
+
+Auth is a discriminated union resolved per-request by `resolveAuthHeaders(auth)`.
+
+| `type` | Config | Header produced |
+|---|---|---|
+| `'basic'` | `{ username, password }` | `Authorization: Basic <base64>` |
+| `'bearer'` | `{ token: string \| () => Promise<string> }` | `Authorization: Bearer <token>` |
+| `'custom'` | `{ headers: Record<string,string> \| () => Promise<Record<string,string>> }` | Spread directly into request headers |
+
+For `'bearer'` and `'custom'`, if the value is a function it is **awaited each request**, enabling token-refresh without recreating the client.
+
+### Legacy shape
+
+Constructing with `auth: { username, password }` (no `type`) is still accepted. It is coerced to `{ type: 'basic', ... }` internally and fires `process.emitWarning(..., 'DeprecationWarning', 'QRYN_AUTH_LEGACY')` once per process. The legacy shape will be removed in 2.0.0.
 
 ## Wire formats
 

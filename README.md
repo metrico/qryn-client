@@ -12,6 +12,154 @@ You can install qryn-client using npm:
 npm install qryn-client
 ```
 
+## Migration to 1.1.0
+
+### Auth shapes
+
+Version 1.1.0 introduces a discriminated-union auth config. The old `{ username, password }` shape still works but emits a `DeprecationWarning` (code `QRYN_AUTH_LEGACY`) once per process and will be removed in 2.0.0.
+
+```js
+const { QrynClient } = require('qryn-client');
+
+// basic (new preferred shape)
+const client = new QrynClient({
+  baseUrl: 'https://qryn.example.com',
+  auth: { type: 'basic', username: 'user', password: 'pass' }
+});
+
+// bearer — static string or async thunk (re-invoked each request)
+const client = new QrynClient({
+  baseUrl: 'https://qryn.example.com',
+  auth: { type: 'bearer', token: () => fetchToken() }
+});
+
+// custom — header map or async thunk
+const client = new QrynClient({
+  baseUrl: 'https://qryn.example.com',
+  auth: { type: 'custom', headers: { 'X-Api-Key': 'my-key' } }
+});
+
+// legacy — still accepted, emits DeprecationWarning QRYN_AUTH_LEGACY
+const client = new QrynClient({
+  baseUrl: 'https://qryn.example.com',
+  auth: { username: 'user', password: 'pass' }
+});
+```
+
+### New constructor options
+
+```js
+const client = new QrynClient({
+  baseUrl: 'https://qryn.example.com',
+  auth: { type: 'basic', username: 'user', password: 'pass' },
+  timeout: 60000,      // default is now 60 000 ms (was 5 000 ms in 1.0.x)
+  retry: {             // default: { attempts: 3, baseDelayMs: 200, maxDelayMs: 5000 }
+    attempts: 5,
+    baseDelayMs: 500,
+    maxDelayMs: 10000
+  },
+  defaultOrgId: 'tenant-a'  // sent as X-Scope-OrgID on every request
+});
+```
+
+**Default timeout change:** the client-level `timeout` default is now `60_000` ms (was `5_000` ms). If your code relied on the 5 s default, pass `timeout: 5000` explicitly.
+
+### Retry policy
+
+Requests are automatically retried on transient failures. The built-in defaults:
+
+| Setting | Default |
+|---|---|
+| `attempts` | `3` |
+| `baseDelayMs` | `200` |
+| `maxDelayMs` | `5000` |
+
+Retries fire on network errors (`ECONNREFUSED`, `ECONNRESET`, `ETIMEDOUT`, `EAI_AGAIN`) and HTTP `408 / 429 / 502 / 503 / 504`. On HTTP 429 the `Retry-After` response header is honored. Retries never fire after a caller abort.
+
+Pass `retry` in the constructor to set a process-wide policy, or per-call via the `opts` argument to override for a single request.
+
+### Per-call opts
+
+Every read method (Loki reader, Prom reader, Tempo), `loki.push`, and `prom.push` accept an `opts` argument:
+
+```js
+const opts = {
+  signal: controller.signal,  // AbortSignal — cancels the request immediately
+  timeoutMs: 5000,             // per-call timeout; overrides constructor timeout
+  retry: { attempts: 1 },     // per-call retry policy; overrides constructor retry
+  orgId: 'tenant-b'           // per-call X-Scope-OrgID; overrides defaultOrgId
+};
+
+await client.loki.push([stream], opts);
+await reader.query('{job="x"}', new Date(), opts);
+await client.tempo.search({ q: '{}' }, opts);
+```
+
+### Abort and timeout errors
+
+```js
+const { QrynAbortedError, QrynTimeoutError } = require('qryn-client');
+
+try {
+  await client.loki.push([stream], { timeoutMs: 2000 });
+} catch (e) {
+  if (e instanceof QrynTimeoutError) {
+    // per-request timeout fired; e.durationMs tells you how long it ran
+    console.error('timed out after', e.durationMs, 'ms');
+  }
+}
+
+const controller = new AbortController();
+controller.abort();
+try {
+  await client.loki.push([stream], { signal: controller.signal });
+} catch (e) {
+  if (e instanceof QrynAbortedError) {
+    // caller cancelled; safe to ignore or log
+  }
+}
+```
+
+For the underlying HTTP and auth architecture, see [`docs/architecture.md`](docs/architecture.md).
+
+### Loki reader
+
+`client.loki.createReader(options?)` returns a `LokiReader` with the full LogQL read surface.
+
+```js
+const reader = client.loki.createReader({ orgId: 'tenant-a' });
+
+// instant query
+const res = await reader.query('{job="api"}', new Date());
+
+// range query
+const res = await reader.queryRange('{job="api"}', startMs, endMs, '15s', 100, 'backward');
+
+// label names and values
+const labels = await reader.labels();
+const values = await reader.labelValues('job');
+
+// series
+const series = await reader.series(['{job="api"}']);
+```
+
+All reader methods accept the same per-call `opts` described above as their last argument.
+
+### New Tempo methods
+
+```js
+// list all tag keys (scope: 'span' | 'resource' | 'intrinsic')
+const tags = await client.tempo.searchTags('resource');
+
+// list values for a tag key (v1)
+const vals = await client.tempo.searchTagValues('service.name');
+
+// fetch all spans for a trace (alias of getTraceSpansJson)
+const trace = await client.tempo.getTrace('abc123def456');
+```
+
+---
+
 ## Usage
 
 ### Creating a qryn-client Instance
@@ -23,17 +171,16 @@ const { QrynClient } = require('qryn-client');
 
 const client = new QrynClient({
   baseUrl: 'https://qryn.example.com',
-  auth: {
-    username: 'your-username',
-    password: 'your-password'
-  },
-  timeout: 5000
+  auth: { type: 'basic', username: 'your-username', password: 'your-password' },
+  timeout: 60000
 });
 ```
 
 - `baseUrl`: The base URL of the Qryn API. Defaults to `http://localhost:3100`.
-- `auth`: An object containing the authentication credentials (`username` and `password`).
-- `timeout`: The timeout value in milliseconds for API requests. Defaults to `5000`.
+- `auth`: Auth config — see [Migration to 1.1.0 → Auth shapes](#auth-shapes) for the full discriminated-union surface.
+- `timeout`: Per-request timeout in milliseconds. Defaults to `60000`.
+- `retry`: Default retry policy `{ attempts, baseDelayMs, maxDelayMs }`. Defaults to `{ attempts: 3, baseDelayMs: 200, maxDelayMs: 5000 }`.
+- `defaultOrgId`: Sent as `X-Scope-OrgID` on every request when set.
 - `headers`: Optional. Extra default headers merged into every request (e.g. `{ 'X-Custom': 'value' }`).
 
 You can create multiple instances of QrynClient with different configurations for backup purposes.
@@ -268,22 +415,19 @@ const promResponse = await client.prom.push([memoryUsed, cpuUsed]).catch(error =
 qryn-client allows you to configure various options when creating an instance. Here are the available configuration options:
 
 - `baseUrl` (optional): The base URL of the Qryn API. Default is `http://localhost:3100`.
-- `auth` (optional): An object containing the authentication credentials.
-  - `username`: The username for authentication.
-  - `password`: The password for authentication.
-- `timeout` (optional): The timeout value in milliseconds for API requests. Default is `5000`.
+- `auth` (optional): Auth config. Accepted shapes: `{ type: 'basic', username, password }`, `{ type: 'bearer', token }`, `{ type: 'custom', headers }`. See [Migration to 1.1.0 → Auth shapes](#auth-shapes).
+- `timeout` (optional): Per-request timeout in milliseconds. Default is `60000`.
+- `retry` (optional): Default retry policy `{ attempts, baseDelayMs, maxDelayMs }`. Default is `{ attempts: 3, baseDelayMs: 200, maxDelayMs: 5000 }`.
+- `defaultOrgId` (optional): Sent as `X-Scope-OrgID` on every request when set.
 - `headers` (optional): Extra default headers merged into every request. `Content-Type: application/json` is set by default and can be overridden here.
-
-You can pass these options when creating a new instance of qryn-client:
 
 ```javascript
 const client = new QrynClient({
   baseUrl: 'https://qryn.example.com',
-  auth: {
-    username: 'your-username',
-    password: 'your-password'
-  },
-  timeout: 5000
+  auth: { type: 'basic', username: 'your-username', password: 'your-password' },
+  timeout: 60000,
+  retry: { attempts: 3, baseDelayMs: 200, maxDelayMs: 5000 },
+  defaultOrgId: 'my-tenant'
 });
 ```
 
@@ -297,10 +441,10 @@ Creates a new instance of QrynClient.
 
 - `options` (object):
   - `baseUrl` (string): The base URL of the Qryn API. Defaults to `http://localhost:3100`.
-  - `auth` (object):
-    - `username` (string): The username for authentication.
-    - `password` (string): The password for authentication.
-  - `timeout` (number): The timeout value in milliseconds for API requests. Defaults to `5000`.
+  - `auth` (`QrynAuth | { username, password }`): Auth config. See [Auth shapes](#auth-shapes).
+  - `timeout` (number): Per-request timeout in milliseconds. Defaults to `60000`.
+  - `retry` (object): Default retry policy `{ attempts, baseDelayMs, maxDelayMs }`. Defaults to `{ attempts: 3, baseDelayMs: 200, maxDelayMs: 5000 }`.
+  - `defaultOrgId` (string): Sent as `X-Scope-OrgID` on every request when set.
   - `headers` (object): Optional extra default headers merged into every request.
 
 #### `createCollector(options)`
@@ -400,14 +544,28 @@ Returns a new `Metric` instance.
 
 ### Tempo
 
-Accessed via `client.tempo`. All methods return a `Promise<QrynResponse>` and throw `QrynError` on failure.
+Accessed via `client.tempo`. All methods return a `Promise<QrynResponse>` and throw `QrynError` on failure. All `options` accept the per-call opts shape `{ signal, timeoutMs, retry, orgId }`.
 
 #### `search(searchParams, options?)`
 
 Free-form trace search against `/api/search`.
 
-- `searchParams` (string | URLSearchParams): query string (without leading `?`).
-- `options.orgId` (string, optional): multi-tenant routing.
+- `searchParams` (string | URLSearchParams | `{ q, start?, end?, limit?, spss? }`): query params.
+- `options` (object, optional): per-call opts.
+
+#### `searchTags(scope?, options?)`
+
+Returns all tag keys. New in 1.1.0.
+
+- `scope` (`'span' | 'resource' | 'intrinsic'`, optional): filter by scope.
+- `options` (object, optional): per-call opts.
+
+#### `searchTagValues(tagName, options?)`
+
+Returns values for a tag key using Tempo's v1 search API. New in 1.1.0.
+
+- `tagName` (string): e.g. `service.name`.
+- `options` (object, optional): per-call opts.
 
 #### `searchTagValuesV2(tagName, searchParams?, options?)`
 
@@ -415,14 +573,21 @@ Returns the values for a given tag using Tempo's v2 search API.
 
 - `tagName` (string): e.g. `service.name`.
 - `searchParams` (string | URLSearchParams, optional).
-- `options.orgId` (string, optional).
+- `options` (object, optional): per-call opts.
+
+#### `getTrace(traceID, options?)`
+
+Fetches the full JSON span payload for a single trace. New in 1.1.0; alias of `getTraceSpansJson`.
+
+- `traceID` (string): hex-encoded trace id.
+- `options` (object, optional): per-call opts.
 
 #### `getTraceSpansJson(traceID, options?)`
 
 Fetches the full JSON span payload for a single trace.
 
 - `traceID` (string): hex-encoded trace id.
-- `options.orgId` (string, optional).
+- `options` (object, optional): per-call opts.
 
 ### Read
 
@@ -482,6 +647,63 @@ Returns a promise that resolves to the response from the series endpoint.
 Retrieve the currently loaded alerting and recording rules.
 
 Returns a promise that resolves to the response from the rules endpoint.
+
+### LokiReader
+
+Accessed via `client.loki.createReader(options?)`. All methods return a `Promise<QrynResponse>` and throw `QrynError` on failure. Every method accepts a trailing `opts` argument `{ signal, timeoutMs, retry, orgId }`.
+
+#### `constructor(service, options?)`
+
+- `options.orgId` (string, optional): applied to every request made through this reader instance.
+
+#### `query(query, time?, opts?)`
+
+Instant LogQL query.
+
+- `query` (string): LogQL query string.
+- `time` (Date | number | string, optional): evaluation timestamp.
+
+#### `queryRange(query, start, end, step?, limit?, direction?, opts?)`
+
+Range LogQL query.
+
+- `query` (string): LogQL query string.
+- `start`, `end` (Date | number | string): time range.
+- `step` (string, optional): e.g. `'15s'`.
+- `limit` (number, optional): max entries to return.
+- `direction` (`'forward' | 'backward'`, optional).
+
+#### `labels(start?, end?, opts?)`
+
+Returns all label names.
+
+#### `labelValues(label, start?, end?, match?, opts?)`
+
+Returns values for a single label name.
+
+- `label` (string): label name (required).
+
+#### `series(matchers, start?, end?, opts?)`
+
+Returns series matching one or more matchers.
+
+- `matchers` (string | string[]): one or more LogQL stream matchers, e.g. `['{job="api"}']`.
+
+### Errors
+
+All errors extend `QrynError`. New in 1.1.0:
+
+#### `QrynAbortedError`
+
+Thrown when a request is cancelled via an `AbortSignal`. Carries `cause` (the abort reason).
+
+#### `QrynTimeoutError`
+
+Thrown when the per-request timeout fires. Carries `durationMs` (elapsed ms at the point of abort).
+
+```js
+const { QrynAbortedError, QrynTimeoutError, QrynError } = require('qryn-client');
+```
 
 ## Contributing
 
