@@ -3,8 +3,16 @@
   "version": "1.0.10",
   "description": "A client library for interacting with qryn, a high-performance observability backend.",
   "main": "src/index.js",
+  "types": "index.d.ts",
+  "files": [
+    "src",
+    "index.d.ts",
+    "dist/types"
+  ],
   "scripts": {
-    "test": "node --test tests/unit/*.test.js"
+    "test": "node --test tests/unit/*.test.js",
+    "test:types": "tsc -p tsconfig.json",
+    "build:types": "tsc -p tsconfig.types.json"
   },
   "author": "tzachiSh",
   "license": "MIT",
@@ -34,5 +42,8 @@
   "homepage": "https://github.com/metrico/qryn-client#readme",
   "engines": {
     "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
   }
 }
