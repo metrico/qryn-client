@@ -213,7 +213,8 @@ class Prometheus {
       body: compressedBuffer,
       signal: options && options.signal,
       timeoutMs: options && options.timeoutMs,
-      retry: options && options.retry
+      retry: options && options.retry,
+      orgId: options && options.orgId
     }).then(res => {
       metrics.forEach(metric => metric.confirm());
       return res;

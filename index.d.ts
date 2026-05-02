@@ -23,12 +23,12 @@ export class QrynTimeoutError extends QrynError {
 
 // -- response wrapper --
 
-export class QrynResponse<T = unknown> {
+export interface QrynResponse<T = unknown> {
   response: T;
   status: number;
   headers: Headers | Record<string, string>;
   path: string;
-  isSuccess(): boolean;
+  readonly isSuccess: boolean;
   getData(): T;
 }
 

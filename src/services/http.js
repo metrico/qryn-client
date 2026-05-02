@@ -148,9 +148,13 @@ class Http {
   #sleep(ms, signal) {
     return new Promise((resolve, reject) => {
       if (ms <= 0) return resolve();
-      const timer = setTimeout(resolve, ms);
+      let onAbort;
+      const timer = setTimeout(() => {
+        if (signal && onAbort) signal.removeEventListener('abort', onAbort);
+        resolve();
+      }, ms);
       if (signal) {
-        const onAbort = () => {
+        onAbort = () => {
           clearTimeout(timer);
           reject(new QrynAbortedError('Request aborted by caller', signal.reason));
         };

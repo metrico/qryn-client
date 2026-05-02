@@ -41,7 +41,8 @@ class Loki {
         body: JSON.stringify(payload),
         signal: options.signal,
         timeoutMs: options.timeoutMs,
-        retry: options.retry
+        retry: options.retry,
+        orgId: options.orgId
       });
 
       streams.forEach(s => s.confirm());
