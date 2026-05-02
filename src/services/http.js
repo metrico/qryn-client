@@ -21,7 +21,7 @@ class Http {
     this.baseUrl = new URL(baseUrl);
     this.timeout = timeout;
     this.headers = headers;
-    this.#setBasicAuth(auth)
+    if (auth) this.#setBasicAuth(auth)
   }
 
   /**
