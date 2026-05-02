@@ -14,14 +14,19 @@ class Read {
   /**
    * Execute a PromQL query and retrieve the result.
    * @param {string} query - The PromQL query string.
+   * @param {ReadOpts} [opts] - Per-call options (signal, timeoutMs, retry, orgId).
    * @returns {Promise<QrynResponse>} A promise that resolves to the response from the query endpoint.
    * @throws {QrynError} If the query request fails.
    */
-  async query(query) {
+  async query(query, opts = {}) {
     return this.service.request('/api/v1/query', {
       method: 'POST',
       headers: this.headers(),
-      body: { query }
+      body: { query },
+      signal: opts.signal,
+      timeoutMs: opts.timeoutMs,
+      retry: opts.retry,
+      orgId: opts.orgId ?? this.options?.orgId
     }).catch(error => {
       if (error instanceof QrynError) {
         throw error;
@@ -36,15 +41,20 @@ class Read {
    * @param {number} start - The start timestamp in seconds.
    * @param {number} end - The end timestamp in seconds.
    * @param {string} step - The query resolution step width in duration format (e.g., '15s').
+   * @param {ReadOpts} [opts] - Per-call options (signal, timeoutMs, retry, orgId).
    * @returns {Promise<QrynResponse>} A promise that resolves to the response from the query range endpoint.
    * @throws {QrynError} If the query range request fails.
    */
-  async queryRange(query, start, end, step) {
+  async queryRange(query, start, end, step, opts = {}) {
 
     return this.service.request('/api/v1/query_range', {
       method: 'POST',
       headers: this.headers(),
-      body: new URLSearchParams({query, start, end, step})
+      body: new URLSearchParams({query, start, end, step}),
+      signal: opts.signal,
+      timeoutMs: opts.timeoutMs,
+      retry: opts.retry,
+      orgId: opts.orgId ?? this.options?.orgId
     }).catch(error => {
       if (error instanceof QrynError) {
         throw error;
@@ -55,13 +65,18 @@ class Read {
 
   /**
    * Retrieve the list of label names.
+   * @param {ReadOpts} [opts] - Per-call options (signal, timeoutMs, retry, orgId).
    * @returns {Promise<QrynResponse>} A promise that resolves to the response from the labels endpoint.
    * @throws {QrynError} If the labels request fails.
    */
-  async labels() {
+  async labels(opts = {}) {
     return this.service.request('/api/v1/labels', {
       method: 'GET',
-      headers: this.headers()
+      headers: this.headers(),
+      signal: opts.signal,
+      timeoutMs: opts.timeoutMs,
+      retry: opts.retry,
+      orgId: opts.orgId ?? this.options?.orgId
     }).catch(error => {
       if (error instanceof QrynError) {
         throw error;
@@ -73,13 +88,18 @@ class Read {
   /**
    * Retrieve the list of label values for a specific label name.
    * @param {string} labelName - The name of the label.
+   * @param {ReadOpts} [opts] - Per-call options (signal, timeoutMs, retry, orgId).
    * @returns {Promise<QrynResponse>} A promise that resolves to the response from the label values endpoint.
    * @throws {QrynError} If the label values request fails.
    */
-  async labelValues(labelName) {
+  async labelValues(labelName, opts = {}) {
     return this.service.request(`/api/v1/label/${labelName}/values`, {
       method: 'GET',
-      headers: this.headers()
+      headers: this.headers(),
+      signal: opts.signal,
+      timeoutMs: opts.timeoutMs,
+      retry: opts.retry,
+      orgId: opts.orgId ?? this.options?.orgId
     }).catch(error => {
       if (error instanceof QrynError) {
         throw error;
@@ -93,10 +113,11 @@ class Read {
    * @param {Array} match - The label set to match.
    * @param {number} start - The start timestamp in seconds.
    * @param {number} end - The end timestamp in seconds.
+   * @param {ReadOpts} [opts] - Per-call options (signal, timeoutMs, retry, orgId).
    * @returns {Promise<QrynResponse>} A promise that resolves to the response from the series endpoint.
    * @throws {QrynError} If the series request fails.
    */
-  async series(match, start, end) {
+  async series(match, start, end, opts = {}) {
     let params = new URLSearchParams({start, end })
     if(!match) throw new QrynError('match parameter is required');
     if(typeof match  === 'string') match = [match];
@@ -105,7 +126,11 @@ class Read {
     return this.service.request('/api/v1/series', {
       method: 'POST',
       headers: this.headers(),
-      body: params
+      body: params,
+      signal: opts.signal,
+      timeoutMs: opts.timeoutMs,
+      retry: opts.retry,
+      orgId: opts.orgId ?? this.options?.orgId
     }).catch(error => {
       if (error instanceof QrynError) {
         throw error;
@@ -116,13 +141,18 @@ class Read {
 
   /**
    * Retrieve the currently loaded alerting and recording rules.
+   * @param {ReadOpts} [opts] - Per-call options (signal, timeoutMs, retry, orgId).
    * @returns {Promise<QrynResponse>} A promise that resolves to the response from the rules endpoint.
    * @throws {QrynError} If the rules request fails.
    */
-  async rules() {
+  async rules(opts = {}) {
     return this.service.request('/api/v1/rules', {
       method: 'GET',
-      headers: this.headers()
+      headers: this.headers(),
+      signal: opts.signal,
+      timeoutMs: opts.timeoutMs,
+      retry: opts.retry,
+      orgId: opts.orgId ?? this.options?.orgId
     }).catch(error => {
       if (error instanceof QrynError) {
         throw error;
@@ -135,7 +165,7 @@ class Read {
     let headers = {
       'Content-Type': 'application/x-www-form-urlencoded'
     };
-    if (this.options.orgId) headers['X-Scope-OrgID'] = this.options.orgId;
+    if (this.options?.orgId) headers['X-Scope-OrgID'] = this.options.orgId;
     return headers;
   }
 }
@@ -180,7 +210,10 @@ class Prometheus {
     return this.service.request('/api/v1/prom/remote/write', {
       method: 'POST',
       headers: this.headers(options),
-      body: compressedBuffer
+      body: compressedBuffer,
+      signal: options && options.signal,
+      timeoutMs: options && options.timeoutMs,
+      retry: options && options.retry
     }).then(res => {
       metrics.forEach(metric => metric.confirm());
       return res;

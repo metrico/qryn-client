@@ -38,7 +38,10 @@ class Loki {
       const response = await this.service.request('/loki/api/v1/push', {
         method: 'POST',
         headers,
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: options.signal,
+        timeoutMs: options.timeoutMs,
+        retry: options.retry
       });
 
       streams.forEach(s => s.confirm());
