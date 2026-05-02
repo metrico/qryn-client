@@ -59,22 +59,29 @@ class Http {
     try {
       const response = await fetch(url.toString(), fetchOptions);
 
-
-      if(headers['Content-Type'] === 'application/x-www-form-urlencoded'){
-        res = await response.json();
+      // Parse the body based on the response Content-Type, not the request's.
+      // Empty bodies (204, no content-length) are tolerated.
+      const responseContentType = (response.headers && response.headers.get && response.headers.get('content-type')) || '';
+      if (response.status !== 204) {
+        if (responseContentType.includes('application/json')) {
+          res = await response.json().catch(() => ({}));
+        } else if (responseContentType) {
+          const text = await response.text().catch(() => '');
+          res = text || {};
+        }
       }
 
       if (!response.ok) {
         let message = `HTTP error! status: ${response.status}`
         throw new QrynError(message, response.status, res, path);
       }
-      
+
       return new QrynResponse(res, response.status, response.headers, path)
-      
+
     } catch (error) {
       if(error instanceof QrynError)
         throw error;
-      throw new QrynError(`Request failed: ${error.message} ${error?.cause?.message}`, 400, error.cause, path);    
+      throw new QrynError(`Request failed: ${error.message} ${error?.cause?.message ?? ''}`.trim(), 400, error.cause, path);
     }
   }
 }
