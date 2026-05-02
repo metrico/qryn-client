@@ -9,6 +9,13 @@ const {
 } = require('../types');
 const { resolveAuthHeaders } = require('./auth');
 const { anySignal } = require('../utils/abort');
+const {
+  DEFAULT_RETRY,
+  computeBackoff,
+  parseRetryAfter,
+  isRetryableStatus,
+  isRetryableNetworkError
+} = require('../utils/retry');
 
 /**
  * Handles HTTP requests for QrynClient.
@@ -34,35 +41,62 @@ class Http {
     this.fetchImpl = fetchImpl;
   }
 
-  /**
-   * @param {string} path
-   * @param {Object} [options]
-   * @param {string} [options.method]
-   * @param {Object} [options.headers]
-   * @param {*} [options.body]
-   * @param {AbortSignal} [options.signal]
-   * @param {number} [options.timeoutMs]
-   * @param {string} [options.orgId]
-   * @returns {Promise<QrynResponse>}
-   */
   async request(path, options = {}) {
+    const retryOpts = { ...DEFAULT_RETRY, ...this.defaultRetry, ...options.retry };
+    const attempts = Math.max(1, retryOpts.attempts);
+
+    let lastError;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      if (options.signal && options.signal.aborted) {
+        throw new QrynAbortedError('Request aborted by caller', options.signal.reason, path);
+      }
+      try {
+        return await this.#singleRequest(path, options);
+      } catch (error) {
+        lastError = error;
+
+        // Caller abort: never retry.
+        if (error instanceof QrynAbortedError) throw error;
+
+        const isLast = attempt === attempts;
+        if (isLast) throw error;
+
+        let delayMs;
+        if (error instanceof QrynError && typeof error.statusCode === 'number') {
+          const retryAfterFromCustom = retryOpts.retryOn
+            ? retryOpts.retryOn(error.statusCode, attempt)
+            : isRetryableStatus(error.statusCode);
+          if (!retryAfterFromCustom) throw error;
+
+          const headerVal = error.cause && error.cause.headers
+            ? error.cause.headers.get && error.cause.headers.get('retry-after')
+            : null;
+          const fromHeader = error.statusCode === 429 ? parseRetryAfter(headerVal) : null;
+          delayMs = fromHeader != null ? fromHeader : computeBackoff(attempt, retryOpts);
+        } else if (isRetryableNetworkError(error) || (error instanceof QrynError && error.cause && isRetryableNetworkError(error.cause))) {
+          delayMs = computeBackoff(attempt, retryOpts);
+        } else {
+          throw error;
+        }
+
+        await this.#sleep(delayMs, options.signal);
+      }
+    }
+    throw lastError;
+  }
+
+  async #singleRequest(path, options) {
     const url = new URL(path, this.baseUrl);
     const effectiveTimeout = options.timeoutMs ?? this.timeout;
 
     const authHeaders = await resolveAuthHeaders(this.auth);
     const orgId = options.orgId ?? this.defaultOrgId;
 
-    const headers = {
-      ...this.headers,
-      ...options.headers,
-      ...authHeaders
-    };
+    const headers = { ...this.headers, ...options.headers, ...authHeaders };
     if (orgId) headers['X-Scope-OrgID'] = orgId;
 
     const timeoutSignal = AbortSignal.timeout(effectiveTimeout);
-    const signal = options.signal
-      ? anySignal([options.signal, timeoutSignal])
-      : timeoutSignal;
+    const signal = options.signal ? anySignal([options.signal, timeoutSignal]) : timeoutSignal;
 
     const startedAt = Date.now();
     let response;
@@ -76,11 +110,7 @@ class Http {
     } catch (error) {
       if (error && error.name === 'AbortError') {
         if (options.signal && options.signal.aborted) {
-          throw new QrynAbortedError(
-            'Request aborted by caller',
-            options.signal.reason,
-            path
-          );
+          throw new QrynAbortedError('Request aborted by caller', options.signal.reason, path);
         }
         throw new QrynTimeoutError(
           `Request timed out after ${effectiveTimeout}ms`,
@@ -108,10 +138,25 @@ class Http {
     }
 
     if (!response.ok) {
-      throw new QrynError(`HTTP error! status: ${response.status}`, response.status, body, path);
+      const cause = { headers: response.headers, body };
+      throw new QrynError(`HTTP error! status: ${response.status}`, response.status, cause, path);
     }
 
     return new QrynResponse(body, response.status, response.headers, path);
+  }
+
+  #sleep(ms, signal) {
+    return new Promise((resolve, reject) => {
+      if (ms <= 0) return resolve();
+      const timer = setTimeout(resolve, ms);
+      if (signal) {
+        const onAbort = () => {
+          clearTimeout(timer);
+          reject(new QrynAbortedError('Request aborted by caller', signal.reason));
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    });
   }
 }
 
