@@ -202,6 +202,15 @@ class Prometheus {
     return new Read(this.service, options);
   }
 
+  /**
+   * Build remote-write headers from push options.
+   * @param {Object} [options={}] - Push options.
+   * @param {string} [options.orgId]   - Multi-tenant routing → `X-Scope-OrgID`.
+   * @param {string|boolean} [options.async] - Non-blocking insert → `X-Async-Insert`.
+   * @param {number} [options.fpLimit] - Fingerprint cap → `X-FP-Limit`.
+   * @param {number} [options.ttlDays] - Retention override → `X-Ttl-Days`.
+   * @returns {Object} Header map.
+   */
   headers(options = {}) {
     let headers = {
       'Content-Type': 'application/x-protobuf',
@@ -210,8 +219,8 @@ class Prometheus {
     };
     if (options.orgId) headers['X-Scope-OrgID'] = options.orgId;
     if (options.async) headers['X-Async-Insert'] = options.async;
-    if (options.fpLimit) headers['X-Ttl-Days'] = options.fpLimit;
-    if (options.ttlDays) headers['X-FP-LIMIT'] = options.ttlDays;
+    if (options.fpLimit) headers['X-FP-Limit'] = options.fpLimit;
+    if (options.ttlDays) headers['X-Ttl-Days'] = options.ttlDays;
     return headers;
   }
 }
