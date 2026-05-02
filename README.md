@@ -31,11 +31,23 @@ const client = new QrynClient({
 });
 ```
 
-- `baseUrl`: The base URL of the Qryn API.
+- `baseUrl`: The base URL of the Qryn API. Defaults to `http://localhost:3100`.
 - `auth`: An object containing the authentication credentials (`username` and `password`).
-- `timeout`: The timeout value in milliseconds for API requests.
+- `timeout`: The timeout value in milliseconds for API requests. Defaults to `5000`.
+- `headers`: Optional. Extra default headers merged into every request (e.g. `{ 'X-Custom': 'value' }`).
 
 You can create multiple instances of QrynClient with different configurations for backup purposes.
+
+### Per-push options
+
+`loki.push` and `prom.push` accept a second `options` argument. The same options are honored by `Collector` if you set them at the collector level.
+
+| Option | Header | Effect |
+|---|---|---|
+| `orgId` | `X-Scope-OrgID` | Multi-tenant routing. |
+| `async` | `X-Async-Insert` | Non-blocking insert (faster but lossy). |
+| `fpLimit` | `X-FP-Limit` | Cap on the number of time-series fingerprints stored. |
+| `ttlDays` | `X-Ttl-Days` | Retention override for the push. |
 
 ### Pushing Logs to Loki
 
@@ -92,18 +104,41 @@ console.log('Prometheus push successful:', promResponse);
 - Use `client.prom.push()` to push an array of metrics to Prometheus.
 - You can catch any errors and fallback to a backup client if needed.
 
+### Searching Traces with Tempo
+
+The `tempo` sub-client exposes Tempo's search and trace-fetch endpoints.
+
+```javascript
+// Free-form search (Tempo `/api/search`)
+const search = await client.tempo.search('tags=service.name=auth-svc&limit=20');
+console.log(search.response);
+
+// Tag-value lookup (Tempo v2 `/api/v2/search/tag/{name}/values`)
+const tagValues = await client.tempo.searchTagValuesV2('service.name');
+console.log(tagValues.response);
+
+// Fetch all spans for a single trace
+const trace = await client.tempo.getTraceSpansJson('abc123def456...');
+console.log(trace.response);
+```
+
+All Tempo methods accept an optional `{ orgId }` second argument that maps to the `X-Scope-OrgID` header for multi-tenant deployments. Errors throw `QrynError` (matching Loki and Prometheus), so the same `.catch()`-based failover pattern applies.
+
 ### Using the Collector
 
 The `Collector` class provides a convenient way to collect and push streams and metrics to Qryn. It automatically handles the bulk pushing of data based on the specified maximum bulk size and timeout.
 
 ```javascript
-const { Collector } = require('qryn-client');
-
-const collector = new Collector(client, {
+// Either of these forms works — prefer the factory:
+const collector = client.createCollector({
   maxBulkSize: 1000,
   maxTimeout: 5000,
   orgId: 'your-org-id'
 });
+
+// Or, equivalently:
+const { Collector } = require('qryn-client');
+const collector2 = new Collector(client, { /* same options */ });
 
 const stream = collector.createStream({ job: 'job1', env: 'prod' });
 stream.addEntry(Date.now(), 'Log message 1');
@@ -115,13 +150,23 @@ const metric = collector.createMetric({
 metric.addSample(1024 * 1024 * 100);
 ```
 
-- Create a new instance of `Collector` by passing the `QrynClient` instance and the desired options.
-  - `maxBulkSize`: The maximum bulk size for pushing data. Default is `1000`.
-  - `maxTimeout`: The maximum timeout for pushing data in milliseconds. Default is `5000`.
-  - `orgId`: The organization ID.
-- Use `collector.createStream()` to create a new stream with the desired labels.
+#### Collector options
+
+| Option | Default | Description |
+|---|---|---|
+| `maxBulkSize` | `1000` | Push when total entries+samples reach this count. |
+| `maxTimeout` | `5000` | Push if no activity for this many ms (resets on every add). |
+| `orgId` | — | Multi-tenant routing → `X-Scope-OrgID` on every push. |
+| `async` | — | Non-blocking insert → `X-Async-Insert`. Faster but lossy. |
+| `fpLimit` | — | Fingerprint cap → `X-FP-Limit`. |
+| `ttlDays` | — | Retention override → `X-Ttl-Days`. |
+| `retryAttempts` | `3` | Total push attempts before emitting `'error'`. |
+| `retryDelay` | `1000` | Base delay (ms) for exponential backoff between retries. |
+| `cache` | LRU defaults below | Passed to [`lru-cache`](https://www.npmjs.com/package/lru-cache). Defaults: `max=10000`, `ttl=3600000`, `updateAgeOnGet=true`, `allowStale=false`. |
+
+- Use `collector.createStream()` to create a new stream with the desired labels. Repeated calls with the same labels return the existing instance (deduped by label-set key).
 - Use `stream.addEntry()` to add log entries to the stream.
-- Use `collector.createMetric()` to create a new metric with the desired name and labels.
+- Use `collector.createMetric()` to create a new metric with the desired name and labels. Same deduplication applies.
 - Use `metric.addSample()` to add samples to the metric.
 - The collector will automatically push the collected streams and metrics to Qryn when the maximum bulk size is reached or the timeout expires.
 
@@ -222,11 +267,12 @@ const promResponse = await client.prom.push([memoryUsed, cpuUsed]).catch(error =
 
 qryn-client allows you to configure various options when creating an instance. Here are the available configuration options:
 
-- `baseUrl` (required): The base URL of the Qryn API.
-- `auth` (required): An object containing the authentication credentials.
+- `baseUrl` (optional): The base URL of the Qryn API. Default is `http://localhost:3100`.
+- `auth` (optional): An object containing the authentication credentials.
   - `username`: The username for authentication.
   - `password`: The password for authentication.
 - `timeout` (optional): The timeout value in milliseconds for API requests. Default is `5000`.
+- `headers` (optional): Extra default headers merged into every request. `Content-Type: application/json` is set by default and can be overridden here.
 
 You can pass these options when creating a new instance of qryn-client:
 
@@ -250,11 +296,18 @@ const client = new QrynClient({
 Creates a new instance of QrynClient.
 
 - `options` (object):
-  - `baseUrl` (string): The base URL of the Qryn API.
+  - `baseUrl` (string): The base URL of the Qryn API. Defaults to `http://localhost:3100`.
   - `auth` (object):
     - `username` (string): The username for authentication.
     - `password` (string): The password for authentication.
-  - `timeout` (number): The timeout value in milliseconds for API requests.
+  - `timeout` (number): The timeout value in milliseconds for API requests. Defaults to `5000`.
+  - `headers` (object): Optional extra default headers merged into every request.
+
+#### `createCollector(options)`
+
+Creates a new `Collector` bound to this client. See the [Collector options table](#collector-options) for the full surface.
+
+Returns a new `Collector` instance.
 
 #### `createStream(labels)`
 
@@ -309,13 +362,23 @@ Adds a sample to the metric.
 
 #### `constructor(qrynClient, options)`
 
-Creates a new instance of Collector.
+Creates a new instance of Collector. Prefer `client.createCollector(options)` for new code.
 
 - `qrynClient` (object): The QrynClient instance.
-- `options` (object):
-  - `maxBulkSize` (number): The maximum bulk size for pushing data. Default is `1000`.
-  - `maxTimeout` (number): The maximum timeout for pushing data in milliseconds. Default is `5000`.
-  - `orgId` (string): The organization ID.
+- `options` (object): see the [Collector options table](#collector-options) for all fields. Headline options:
+  - `maxBulkSize` (number, default `1000`).
+  - `maxTimeout` (number, default `5000`).
+  - `orgId` (string).
+  - `async`, `fpLimit`, `ttlDays` — passed through as headers on every push.
+  - `retryAttempts` (default `3`), `retryDelay` (default `1000`).
+  - `cache` — `lru-cache` options, see [Collector options table](#collector-options).
+
+#### Events
+
+Emitted via the standard `EventEmitter` interface:
+
+- `'info'` — fired with the `QrynResponse` after a successful push.
+- `'error'` — fired with a `QrynError` when all retry attempts have been exhausted.
 
 #### `createStream(labels)`
 
@@ -334,6 +397,32 @@ Creates a new metric with the specified options and adds it to the collector.
   - `labels` (object): An object containing the labels for the metric.
 
 Returns a new `Metric` instance.
+
+### Tempo
+
+Accessed via `client.tempo`. All methods return a `Promise<QrynResponse>` and throw `QrynError` on failure.
+
+#### `search(searchParams, options?)`
+
+Free-form trace search against `/api/search`.
+
+- `searchParams` (string | URLSearchParams): query string (without leading `?`).
+- `options.orgId` (string, optional): multi-tenant routing.
+
+#### `searchTagValuesV2(tagName, searchParams?, options?)`
+
+Returns the values for a given tag using Tempo's v2 search API.
+
+- `tagName` (string): e.g. `service.name`.
+- `searchParams` (string | URLSearchParams, optional).
+- `options.orgId` (string, optional).
+
+#### `getTraceSpansJson(traceID, options?)`
+
+Fetches the full JSON span payload for a single trace.
+
+- `traceID` (string): hex-encoded trace id.
+- `options.orgId` (string, optional).
 
 ### Read
 
