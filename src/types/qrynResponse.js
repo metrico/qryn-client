@@ -26,10 +26,10 @@ class QrynResponse {
 
   /**
    * Get the response data.
-   * @returns {Object} The response data.
+   * @returns {Object} The response body.
    */
   getData() {
-    return this.data;
+    return this.response;
   }
 
   /**
@@ -67,7 +67,7 @@ class QrynResponse {
    * @returns {string} A string representation of the response.
    */
   toString() {
-    return this.type + ` Response {status: ${this.status}, data: ${JSON.stringify(this.data)}}`;
+    return `QrynResponse {status: ${this.status}, path: ${this.path}, data: ${JSON.stringify(this.response)}}`;
   }
 }
 
