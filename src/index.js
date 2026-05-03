@@ -99,9 +99,15 @@ class GigapipeClient {
   // Add more methods for other Gigapipe operations as needed
 }
 
-module.exports = { 
-  GigapipeClient, 
-  Stream, 
-  Metric, 
-  Collector 
+const { GigapipeResponse, GigapipeAbortedError, GigapipeTimeoutError } = require('./types');
+
+module.exports = {
+  GigapipeClient,
+  Stream,
+  Metric,
+  Collector,
+  GigapipeError,
+  GigapipeResponse,
+  GigapipeAbortedError,
+  GigapipeTimeoutError
 };
