@@ -23,26 +23,49 @@ const {
  *   - timeoutMs  — per-attempt timeout (overrides instance timeout)
  *   - orgId      — sets X-Scope-OrgID header (overrides instance/default)
  *   - retry      — RetryOptions; overrides instance defaultRetry
+ *   - authResolver — async () => Record<string,string>; overrides resolved auth headers
  */
 class Http {
   constructor(baseUrl, timeout, headers, auth) {
     this.baseUrl = new URL(baseUrl);
     this.timeout = timeout;
     this.headers = headers || {};
-    this.#setBasicAuth(auth);
-  }
-
-  #setBasicAuth(auth) {
-    if (auth && auth.username !== undefined && auth.password !== undefined) {
-      this.basicAuth = Buffer.from(`${auth.username}:${auth.password}`).toString('base64');
-    } else {
-      this.basicAuth = null;
-    }
+    this.auth = this.#normalizeAuth(auth);
   }
 
   /**
-   * Make an HTTP request, retrying as configured.
+   * Normalize either the legacy {username,password} or the new
+   * discriminated union to a single shape. Returns null when no auth.
    */
+  #normalizeAuth(auth) {
+    if (!auth) return null;
+    if (auth.type === 'basic')  return { type: 'basic',  username: auth.username, password: auth.password };
+    if (auth.type === 'bearer') return { type: 'bearer', token: auth.token };
+    if (auth.type === 'custom') return { type: 'custom', headers: auth.headers };
+    if (auth.username !== undefined && auth.password !== undefined) {
+      return { type: 'basic', username: auth.username, password: auth.password };
+    }
+    return null;
+  }
+
+  async #resolveAuthHeaders() {
+    if (!this.auth) return {};
+    if (this.auth.type === 'basic') {
+      const b64 = Buffer.from(`${this.auth.username}:${this.auth.password}`).toString('base64');
+      return { Authorization: `Basic ${b64}` };
+    }
+    if (this.auth.type === 'bearer') {
+      const token = typeof this.auth.token === 'function' ? await this.auth.token() : this.auth.token;
+      return { Authorization: `Bearer ${token}` };
+    }
+    if (this.auth.type === 'custom') {
+      const h = typeof this.auth.headers === 'function' ? await this.auth.headers() : this.auth.headers;
+      return { ...(h || {}) };
+    }
+    return {};
+  }
+
+  /** Make an HTTP request, retrying as configured. */
   async request(path, options = {}) {
     const retry = { ...DEFAULT_RETRY_OPTIONS, ...(this.defaultRetry || {}), ...(options.retry || {}) };
     const callerSignal = options.signal;
@@ -89,9 +112,7 @@ class Http {
     });
   }
 
-  /**
-   * Single-shot HTTP request; throws GigapipeError/GigapipeAbortedError/GigapipeTimeoutError.
-   */
+  /** Single-shot HTTP request. Throws GigapipeError/GigapipeAbortedError/GigapipeTimeoutError. */
   async #requestOnce(path, options = {}) {
     const url = new URL(path, this.baseUrl);
 
@@ -102,7 +123,11 @@ class Http {
 
     const headers = { ...this.headers, ...options.headers };
     if (options.orgId) headers['X-Scope-OrgID'] = options.orgId;
-    if (this.basicAuth) headers['Authorization'] = `Basic ${this.basicAuth}`;
+
+    const authHeaders = await (options.authResolver
+      ? options.authResolver()
+      : this.#resolveAuthHeaders());
+    Object.assign(headers, authHeaders);
 
     const { signal: _s, timeoutMs: _t, orgId: _o, retry: _r, authResolver: _a, ...rest } = options;
     const fetchOptions = { ...rest, headers, signal: combinedSignal };
