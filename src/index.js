@@ -32,7 +32,15 @@ class GigapipeClient {
     if (typeof config !== 'object' || config === null) {
       throw new GigapipeError('Config must be a non-null object');
     }
-    const auth = config.auth
+    let auth = config.auth;
+    if (auth && auth.type === undefined && auth.username !== undefined) {
+      process.emitWarning(
+        "gigapipe-client: auth: { username, password } is deprecated; use auth: { type: 'basic', username, password }. The legacy shape will be removed in 2.0.0.",
+        'DeprecationWarning',
+        'GIGAPIPE_AUTH_LEGACY'
+      );
+      auth = { type: 'basic', username: auth.username, password: auth.password };
+    }
     const baseUrl = config.baseUrl || 'http://localhost:3100';
     const timeout = config.timeout || 5000;
     const headers = {
@@ -40,6 +48,8 @@ class GigapipeClient {
       ...config.headers
     };
     const http = new Http(baseUrl, timeout, headers, auth);
+    if (config.retry) http.defaultRetry = config.retry;
+    if (config.defaultOrgId) http.defaultOrgId = config.defaultOrgId;
     this.prom = new PrometheusClient(http);
     this.loki = new LokiClient(http);
     this.tempo = new TempoClient(http);
@@ -89,9 +99,15 @@ class GigapipeClient {
   // Add more methods for other Gigapipe operations as needed
 }
 
-module.exports = { 
-  GigapipeClient, 
-  Stream, 
-  Metric, 
-  Collector 
+const { GigapipeResponse, GigapipeAbortedError, GigapipeTimeoutError } = require('./types');
+
+module.exports = {
+  GigapipeClient,
+  Stream,
+  Metric,
+  Collector,
+  GigapipeError,
+  GigapipeResponse,
+  GigapipeAbortedError,
+  GigapipeTimeoutError
 };
