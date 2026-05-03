@@ -54,22 +54,21 @@ describe('Http.request — retry loop', () => {
 
   it('aborts the chain immediately on caller signal', async () => {
     let n = 0;
-    globalThis.fetch = async (url, init) => {
+    const ctl = new AbortController();
+    // Abort during the first fetch so the chain breaks at the next iteration.
+    globalThis.fetch = async () => {
       n++;
-      if (init.signal.aborted) {
-        const err = new Error('aborted'); err.name = 'AbortError'; throw err;
+      if (n === 1) {
+        ctl.abort('cancel');
+        return new Response('busy', { status: 503 });
       }
+      // Should not be reached.
       return new Response('busy', { status: 503 });
     };
-    const restore = mock.method(Math, 'random', () => 0);
-    try {
-      const http = new Http('http://localhost', 5000, {}, { username: 'u', password: 'p' });
-      const ctl = new AbortController();
-      const p = http.request('/x', { method: 'GET', signal: ctl.signal, retry: { attempts: 5, baseDelayMs: 50, maxDelayMs: 50 } });
-      setTimeout(() => ctl.abort('cancel'), 10);
-      await assert.rejects(p, (err) => err instanceof GigapipeAbortedError);
-      assert.ok(n < 5, 'should not exhaust retry budget after caller abort');
-    } finally { restore.mock.restore(); }
+    const http = new Http('http://localhost', 5000, {}, { username: 'u', password: 'p' });
+    const p = http.request('/x', { method: 'GET', signal: ctl.signal, retry: { attempts: 5, baseDelayMs: 1, maxDelayMs: 1 } });
+    await assert.rejects(p, (err) => err instanceof GigapipeAbortedError);
+    assert.equal(n, 1, 'should not retry after caller abort');
   });
 
   it('uses instance default retry options when opts.retry is omitted', async () => {
