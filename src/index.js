@@ -48,6 +48,8 @@ class GigapipeClient {
       ...config.headers
     };
     const http = new Http(baseUrl, timeout, headers, auth);
+    if (config.retry) http.defaultRetry = config.retry;
+    if (config.defaultOrgId) http.defaultOrgId = config.defaultOrgId;
     this.prom = new PrometheusClient(http);
     this.loki = new LokiClient(http);
     this.tempo = new TempoClient(http);

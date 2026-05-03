@@ -122,7 +122,8 @@ class Http {
     const combinedSignal = anySignal([callerSignal, timeoutSignal]);
 
     const headers = { ...this.headers, ...options.headers };
-    if (options.orgId) headers['X-Scope-OrgID'] = options.orgId;
+    const orgId = options.orgId || this.defaultOrgId;
+    if (orgId) headers['X-Scope-OrgID'] = orgId;
 
     const authHeaders = await (options.authResolver
       ? options.authResolver()
