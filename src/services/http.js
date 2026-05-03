@@ -6,6 +6,13 @@ const {
   GigapipeTimeoutError
 } = require('../types');
 const { anySignal } = require('../utils/abort');
+const {
+  DEFAULT_RETRY_OPTIONS,
+  computeBackoffMs,
+  isRetryableStatus,
+  isRetryableNetworkError,
+  parseRetryAfterMs
+} = require('../utils/retry');
 
 /**
  * HTTP layer for GigapipeClient.
@@ -14,7 +21,8 @@ const { anySignal } = require('../utils/abort');
  *   - method, headers, body            (existing)
  *   - signal     — caller AbortSignal
  *   - timeoutMs  — per-attempt timeout (overrides instance timeout)
- *   - orgId      — sets X-Scope-OrgID header (overrides instance header)
+ *   - orgId      — sets X-Scope-OrgID header (overrides instance/default)
+ *   - retry      — RetryOptions; overrides instance defaultRetry
  */
 class Http {
   constructor(baseUrl, timeout, headers, auth) {
@@ -33,13 +41,58 @@ class Http {
   }
 
   /**
-   * Make an HTTP request.
-   * @param {string} path
-   * @param {Object} options
-   * @returns {Promise<GigapipeResponse>}
-   * @throws {GigapipeError|GigapipeAbortedError|GigapipeTimeoutError}
+   * Make an HTTP request, retrying as configured.
    */
   async request(path, options = {}) {
+    const retry = { ...DEFAULT_RETRY_OPTIONS, ...(this.defaultRetry || {}), ...(options.retry || {}) };
+    const callerSignal = options.signal;
+    let lastError;
+
+    for (let attempt = 1; attempt <= retry.attempts; attempt++) {
+      if (callerSignal && callerSignal.aborted) {
+        throw new GigapipeAbortedError('Request aborted', { reason: callerSignal.reason, path });
+      }
+      try {
+        return await this.#requestOnce(path, options);
+      } catch (err) {
+        lastError = err;
+        if (err instanceof GigapipeAbortedError) throw err;
+        if (attempt >= retry.attempts) throw err;
+
+        const shouldRetry = (typeof retry.retryOn === 'function')
+          ? retry.retryOn(err.statusCode || 0, attempt)
+          : (isRetryableStatus(err.statusCode) || isRetryableNetworkError(err.cause) || isRetryableNetworkError(err));
+        if (!shouldRetry) throw err;
+
+        const retryAfterRaw = err.headers && typeof err.headers.get === 'function'
+          ? err.headers.get('retry-after')
+          : null;
+        const retryAfter = parseRetryAfterMs(retryAfterRaw);
+        const delayMs = (retryAfter !== null && retryAfter !== undefined)
+          ? retryAfter
+          : computeBackoffMs(attempt, retry.baseDelayMs, retry.maxDelayMs);
+        await this.#sleep(delayMs, callerSignal);
+      }
+    }
+    throw lastError;
+  }
+
+  #sleep(ms, callerSignal) {
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(resolve, ms);
+      if (callerSignal) {
+        callerSignal.addEventListener('abort', () => {
+          clearTimeout(t);
+          reject(new GigapipeAbortedError('Request aborted during backoff', { reason: callerSignal.reason }));
+        }, { once: true });
+      }
+    });
+  }
+
+  /**
+   * Single-shot HTTP request; throws GigapipeError/GigapipeAbortedError/GigapipeTimeoutError.
+   */
+  async #requestOnce(path, options = {}) {
     const url = new URL(path, this.baseUrl);
 
     const callerSignal = options.signal;
@@ -85,7 +138,9 @@ class Http {
     }
 
     if (!response.ok) {
-      throw new GigapipeError(`HTTP error! status: ${response.status}`, response.status, res, path);
+      const e = new GigapipeError(`HTTP error! status: ${response.status}`, response.status, res, path);
+      e.headers = response.headers;
+      throw e;
     }
 
     return new GigapipeResponse(res, response.status, response.headers, path);
