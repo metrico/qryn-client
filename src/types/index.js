@@ -1,5 +1,7 @@
-const GigapipeError = require("./gigapipeError");
-const GigapipeResponse = require("./gigapipeResponse");
+const GigapipeError = require('./gigapipeError');
+const GigapipeResponse = require('./gigapipeResponse');
+const GigapipeAbortedError = require('./gigapipeAbortedError');
+const GigapipeTimeoutError = require('./gigapipeTimeoutError');
 
 class NetworkError extends GigapipeError {
   constructor(message, options = {}) {
@@ -21,5 +23,7 @@ module.exports = {
   NetworkError,
   ValidationError,
   GigapipeError,
-  GigapipeResponse
-}
+  GigapipeResponse,
+  GigapipeAbortedError,
+  GigapipeTimeoutError
+};
