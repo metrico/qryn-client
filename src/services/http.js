@@ -1,85 +1,94 @@
-const { GigapipeError } = require('../types');
 const { URL } = require('url');
-const GigapipeResponse = require('../types/gigapipeResponse');
+const {
+  GigapipeError,
+  GigapipeResponse,
+  GigapipeAbortedError,
+  GigapipeTimeoutError
+} = require('../types');
+const { anySignal } = require('../utils/abort');
 
 /**
- * Handles HTTP requests for GigapipeClient.
+ * HTTP layer for GigapipeClient.
+ *
+ * Per-call request options (override instance defaults):
+ *   - method, headers, body            (existing)
+ *   - signal     — caller AbortSignal
+ *   - timeoutMs  — per-attempt timeout (overrides instance timeout)
+ *   - orgId      — sets X-Scope-OrgID header (overrides instance header)
  */
 class Http {
-  baseUrl = null;
-  timeout = null;
-  headers = null;
-  basicAuth = null;
-
-  /**
-   * Create an HttpClient.
-   * @param {string} baseUrl - The base URL for the Gigapipe server.
-   * @param {number} timeout - The timeout for requests in milliseconds.
-   * @param {Object} headers - Headers to send with requests.
-   */
   constructor(baseUrl, timeout, headers, auth) {
     this.baseUrl = new URL(baseUrl);
     this.timeout = timeout;
-    this.headers = headers;
-    this.#setBasicAuth(auth)
+    this.headers = headers || {};
+    this.#setBasicAuth(auth);
   }
 
-  /**
-   * Set basic authentication credentials.
-   * @param {string} username - The username for basic auth.
-   * @param {string} password - The password for basic auth.
-   */
-  #setBasicAuth({username, password}) {
-    this.basicAuth = Buffer.from(`${username}:${password}`).toString('base64');
+  #setBasicAuth(auth) {
+    if (auth && auth.username !== undefined && auth.password !== undefined) {
+      this.basicAuth = Buffer.from(`${auth.username}:${auth.password}`).toString('base64');
+    } else {
+      this.basicAuth = null;
+    }
   }
 
   /**
    * Make an HTTP request.
-   * @param {string} path - The path to append to the base URL.
-   * @param {Object} options - The options for the fetch request.
-   * @returns {Promise<Object>} The parsed JSON response.
-   * @throws {GigapipeError} If the request fails or returns a non-OK status.
+   * @param {string} path
+   * @param {Object} options
+   * @returns {Promise<GigapipeResponse>}
+   * @throws {GigapipeError|GigapipeAbortedError|GigapipeTimeoutError}
    */
   async request(path, options = {}) {
     const url = new URL(path, this.baseUrl);
+
+    const callerSignal = options.signal;
+    const timeoutMs = options.timeoutMs ?? this.timeout;
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const combinedSignal = anySignal([callerSignal, timeoutSignal]);
+
     const headers = { ...this.headers, ...options.headers };
+    if (options.orgId) headers['X-Scope-OrgID'] = options.orgId;
+    if (this.basicAuth) headers['Authorization'] = `Basic ${this.basicAuth}`;
+
+    const { signal: _s, timeoutMs: _t, orgId: _o, retry: _r, authResolver: _a, ...rest } = options;
+    const fetchOptions = { ...rest, headers, signal: combinedSignal };
+
+    const startedAt = Date.now();
+    let response;
     let res = {};
-
-    // Add Authorization header if basic auth is set
-    if (this.basicAuth) {
-      headers['Authorization'] = `Basic ${this.basicAuth}`;
-    }
-
-    const fetchOptions = {
-      ...options,
-      headers,
-      signal: AbortSignal.timeout(this.timeout)
-    };
-
     try {
-      const response = await fetch(url.toString(), fetchOptions);
-
-
-      // Parse response body if present
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        res = await response.json();
-      } else if (response.status !== 204) {
-        res = await response.text();
-      }
-
-      if (!response.ok) {
-        let message = `HTTP error! status: ${response.status}`
-        throw new GigapipeError(message, response.status, res, path);
-      }
-      
-      return new GigapipeResponse(res, response.status, response.headers, path)
-      
+      response = await fetch(url.toString(), fetchOptions);
     } catch (error) {
-      if(error instanceof GigapipeError)
-        throw error;
-      throw new GigapipeError(`Request failed: ${error.message} ${error?.cause?.message}`, 400, error.cause, path);    
+      if (error && error.name === 'AbortError') {
+        if (callerSignal && callerSignal.aborted) {
+          throw new GigapipeAbortedError('Request aborted', { reason: callerSignal.reason, path });
+        }
+        throw new GigapipeTimeoutError(`Request timed out after ${timeoutMs}ms`, {
+          elapsedMs: Date.now() - startedAt,
+          path
+        });
+      }
+      throw new GigapipeError(
+        `Request failed: ${error.message}${error?.cause?.message ? ' ' + error.cause.message : ''}`,
+        400,
+        error.cause || error,
+        path
+      );
     }
+
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      res = await response.json();
+    } else if (response.status !== 204) {
+      res = await response.text();
+    }
+
+    if (!response.ok) {
+      throw new GigapipeError(`HTTP error! status: ${response.status}`, response.status, res, path);
+    }
+
+    return new GigapipeResponse(res, response.status, response.headers, path);
   }
 }
 
