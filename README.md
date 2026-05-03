@@ -392,6 +392,80 @@ Retrieve the currently loaded alerting and recording rules.
 
 Returns a promise that resolves to the response from the rules endpoint.
 
+## v1.1.0 surface
+
+### New `auth` shapes (legacy still accepted)
+
+```js
+new GigapipeClient({
+  baseUrl: 'http://localhost:3100',
+  auth: { type: 'basic',  username: 'u', password: 'p' },
+  // or:
+  auth: { type: 'bearer', token: 'static-token' },
+  auth: { type: 'bearer', token: async () => fetchTokenFromVault() },
+  auth: { type: 'custom', headers: { 'X-Api-Key': 'abc' } },
+  auth: { type: 'custom', headers: async () => ({ 'X-Api-Key': await rotateKey() }) }
+});
+```
+
+The legacy `auth: { username, password }` shape is still accepted but emits a `DeprecationWarning` (code `GIGAPIPE_AUTH_LEGACY`). It will be removed in 2.0.0.
+
+### Per-call `ReadOpts`
+
+Every read and write method now accepts an `opts: { signal?, timeoutMs?, retry?, orgId? }` last argument:
+
+```js
+const ctl = new AbortController();
+await client.loki.createReader({}).queryRange(query, start, end, { limit: 100 }, {
+  signal: ctl.signal,
+  timeoutMs: 30_000,
+  orgId: 'tenant-a',
+  retry: { attempts: 3, baseDelayMs: 200, maxDelayMs: 5000 }
+});
+```
+
+### Retry / backoff
+
+Retries on network errors (`ECONNREFUSED`, `ECONNRESET`, `ETIMEDOUT`, `EAI_AGAIN`) and HTTP `408`, `429`, `502`, `503`, `504`. Honors `Retry-After` (delta-seconds OR HTTP-date). Configurable per-call via `opts.retry` or per-instance via `new GigapipeClient({ retry })`. Defaults: `{ attempts: 3, baseDelayMs: 200, maxDelayMs: 5000 }`.
+
+Each attempt receives the full `timeoutMs` budget — retries do not double-count against the caller's deadline. The caller-supplied `signal` aborts the entire chain immediately.
+
+### Typed errors
+
+```js
+const { GigapipeError, GigapipeAbortedError, GigapipeTimeoutError } = require('gigapipe-client');
+
+try {
+  await client.loki.createReader({}).query(q, {}, { signal });
+} catch (e) {
+  if (e instanceof GigapipeAbortedError) {/* user cancelled — e.reason */}
+  else if (e instanceof GigapipeTimeoutError) {/* attempt budget exceeded — e.elapsedMs */}
+  else if (e instanceof GigapipeError) {/* HTTP error — e.statusCode, e.cause */}
+}
+```
+
+### `defaultOrgId`
+
+Set once at the client level and forwarded as `X-Scope-OrgID` on every request. Per-call `opts.orgId` overrides.
+
+```js
+new GigapipeClient({ baseUrl, auth, defaultOrgId: 'tenant-a' });
+```
+
+### Tempo additions
+
+```js
+client.tempo.searchTags('span' | 'resource' | 'intrinsic');
+client.tempo.searchTagValues('service.name');
+client.tempo.getTrace('abc-123');         // alias of getTraceSpansJson but on /api/traces/{id}
+```
+
+The existing `searchTagValuesV2` and `getTraceSpansJson` continue to work.
+
+### TypeScript
+
+The package ships an `index.d.ts`. `tsc --noEmit --strict` passes from a consumer project.
+
 ## Contributing
 
 Contributions to gigapipe-client are welcome! If you find any issues or have suggestions for improvements, please open an issue or submit a pull request on the [GitHub repository](https://github.com/gigapipe/gigapipe-client).
