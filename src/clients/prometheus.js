@@ -38,12 +38,22 @@ class Read {
     });
   }
 
-  async labelValues(labelName, opts = {}) {
-    return this.service.request(`/api/v1/label/${labelName}/values`, {
-      method: 'GET',
-      headers: this.headers(opts),
-      ...this.#callOpts(opts)
-    });
+  async labelValues(labelName, start, end, opts = {}) {
+    const params = new URLSearchParams();
+  
+    if (start != null) params.append('start', start);
+    if (end != null) params.append('end', end);
+  
+    const query = params.toString();
+  
+    return this.service.request(
+        /api/v1/label/${encodeURIComponent(labelName)}/values${query ? ?${query} : ''},
+        {
+          method: 'GET',
+          headers: this.headers(opts),
+          ...this.#callOpts(opts)
+        }
+    );
   }
 
   async series(match, start, end, opts = {}) {
