@@ -47,7 +47,7 @@ class Read {
     const query = params.toString();
   
     return this.service.request(
-        /api/v1/label/${encodeURIComponent(labelName)}/values${query ? ?${query} : ''},
+        `/api/v1/label/${encodeURIComponent(labelName)}/values${query ? `?${query}` : ''}`,
         {
           method: 'GET',
           headers: this.headers(opts),
